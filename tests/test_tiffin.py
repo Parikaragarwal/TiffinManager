@@ -1,11 +1,10 @@
 import unittest
 import tempfile
-import sqlite3
 from pathlib import Path
 from datetime import date, timedelta
 from unittest.mock import patch
 
-from tiffin import db, settlement_db, input as input_mod, reports, billing, export
+from tiffin import db, settlement_db, input as input_mod, reports, billing, export, formatting
 
 
 class TestTiffinCore(unittest.TestCase):
@@ -109,15 +108,23 @@ class TestTiffinCore(unittest.TestCase):
         self.assertTrue(input_mod.get_learned_ate_default([True, True, False]))
         self.assertFalse(input_mod.get_learned_ate_default([False, False, False]))
 
-    def test_reports_and_missing_records(self):
+    def test_report_scopes_unsettled_month_all(self):
         today_str = date.today().isoformat()
+        past_str = "2026-08-01"
         people = db.get_people()
         p1_id = people[0][0]
 
+        db.save_consumption(past_str, "lunch", p1_id, True, "Regular", 7000)
         db.save_consumption(today_str, "lunch", p1_id, True, "Regular", 7000)
 
-        month_data = reports.get_month_report(today_str, today_str)
-        self.assertEqual(month_data["overview"]["tiffins"], 1)
+        start_unsettled, end_unsettled, label_unsettled = reports.parse_date_range(scope="unsettled")
+        self.assertEqual(start_unsettled, past_str)
+
+        start_all, end_all, label_all = reports.parse_date_range(scope="all")
+        self.assertEqual(start_all, past_str)
+
+        month_data = reports.get_month_report(start_unsettled, end_unsettled)
+        self.assertEqual(month_data["overview"]["tiffins"], 2)
 
     def test_csv_and_whatsapp_export(self):
         today_str = date.today().isoformat()

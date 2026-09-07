@@ -29,7 +29,6 @@ from .reports import (
 )
 from .export import (
     export_bill_to_csv,
-    export_month_to_csv,
     generate_whatsapp_summary,
 )
 from .formatting import (
@@ -37,6 +36,7 @@ from .formatting import (
     display_date,
     show_audit_log,
     show_bill,
+    show_help_manual,
     show_missing_records,
     show_month_report,
     show_review,
@@ -59,6 +59,12 @@ from .input import (
 app = typer.Typer(help="🍱 Tiffin - Personal Tiffin & Meal Management CLI")
 
 
+@app.command(name="help")
+def help_cmd():
+    """Display the beautiful interactive user manual & reference guide."""
+    show_help_manual()
+
+
 @app.command()
 def init():
     """Initialize the Tiffin database and seed default people."""
@@ -71,14 +77,14 @@ def init():
 
 @app.command()
 def record():
-    """Record a meal for everyone on a given date."""
+    """Record a meal for everyone on a given date with explicit prompt guidance."""
     initialize_database()
     seed_people()
 
     people = get_people()
     console.print("\n[bold cyan]🍱 Tiffin Meal Recorder[/bold cyan]\n")
 
-    record_date = prompt_date()
+    record_date = prompt_date("Select Date to Record")
     recorded_meals = get_recorded_meals(record_date)
 
     if "lunch" in recorded_meals and "dinner" in recorded_meals:
@@ -177,7 +183,7 @@ def edit(
     seed_people()
 
     if date_value is None:
-        record_date = prompt_date("Date to edit")
+        record_date = prompt_date("Select Date to Edit")
     else:
         try:
             record_date = parse_date(date_value)
@@ -289,7 +295,7 @@ def settle():
     person_id, name = prompt_person(people)
 
     console.print(f"\n[bold cyan]Recording settlement for {name}[/bold cyan]")
-    price_val = typer.prompt("  Amount Paid (₹)")
+    price_val = typer.prompt("  Amount Paid in Rupees (₹) [e.g. 500 or 770]")
 
     try:
         amount_paise = parse_price(price_val)
@@ -298,7 +304,7 @@ def settle():
         raise typer.Exit(code=1)
 
     settle_date = prompt_date("Settlement Date")
-    notes = typer.prompt("Notes (e.g. GPay, Cash, September bill)", default="GPay").strip()
+    notes = typer.prompt("  Notes/Payment Method (e.g. GPay, Cash, September bill)", default="GPay").strip()
 
     record_settlement(
         person_id=person_id,
@@ -357,6 +363,12 @@ def report(
         "-p",
         help="Period or date range (e.g., '2026-09', 'september', or '2026-09-01:2026-09-30').",
     ),
+    scope: str = typer.Option(
+        "unsettled",
+        "--scope",
+        "-s",
+        help="Report scope if no period specified: 'unsettled' (default: earliest un-cleared date to today), 'month' (current month), or 'all' (entire history).",
+    ),
     from_date: str = typer.Option(
         None,
         "--from",
@@ -370,7 +382,7 @@ def report(
         help="End date (YYYY-MM-DD).",
     ),
 ):
-    """View analytics consumption report between dates or for a month."""
+    """View analytics consumption report (defaults to unsettled dues period)."""
     initialize_database()
     seed_people()
 
@@ -379,7 +391,7 @@ def report(
         end_date = parse_date(to_date)
         label = f"{display_date(start_date)} to {display_date(end_date)}"
     else:
-        start_date, end_date, label = parse_date_range(period)
+        start_date, end_date, label = parse_date_range(period, scope=scope.lower())
 
     month_data = get_month_report(start_date, end_date)
     show_month_report(month_data, label)

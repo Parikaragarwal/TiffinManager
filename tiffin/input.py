@@ -92,14 +92,16 @@ def parse_date(value: str) -> str:
         )
 
 
-def prompt_date(prompt_text: str = "Date") -> str:
-    """Prompt until a valid date is entered."""
+def prompt_date(prompt_text: str = "Date", default_val: str | None = None) -> str:
+    """Prompt until a valid date is entered with explicit directions."""
     today = date.today()
+    if default_val is None:
+        default_val = today.isoformat()
 
     while True:
         value = typer.prompt(
-            prompt_text,
-            default=today.isoformat(),
+            f"{prompt_text} [today, yesterday, YYYY-MM-DD, DD/MM, or day (1-31)]",
+            default=default_val,
         )
 
         try:
@@ -121,7 +123,7 @@ def prompt_date(prompt_text: str = "Date") -> str:
 
 
 def prompt_meal(default_meal: str | None = None) -> str:
-    """Prompt for lunch or dinner."""
+    """Prompt for lunch or dinner with clear option directions."""
     if default_meal is None:
         default_meal = get_current_meal()
 
@@ -129,7 +131,7 @@ def prompt_meal(default_meal: str | None = None) -> str:
 
     while True:
         value = typer.prompt(
-            "Meal [1=Lunch, 2=Dinner]",
+            "Meal Choice [1 = Lunch, 2 = Dinner]",
             default=str(default_number),
         ).strip().lower()
 
@@ -138,14 +140,14 @@ def prompt_meal(default_meal: str | None = None) -> str:
         if value in ("2", "dinner"):
             return "dinner"
 
-        typer.echo("✗ Choose 1 for lunch or 2 for dinner.")
+        typer.echo("✗ Please enter 1 for Lunch or 2 for Dinner.")
 
 
 def prompt_type(default_val: str = "1") -> str:
-    """Prompt for regular, special, or a custom description."""
+    """Prompt for regular, special, or custom description with clear directions."""
     while True:
         value = typer.prompt(
-            "  Type [1=Regular, 2=Special, 3=Custom]",
+            "  Meal Type [1 = Regular (₹70), 2 = Special, 3 = Custom description]",
             default=default_val,
         ).strip().lower()
 
@@ -154,13 +156,13 @@ def prompt_type(default_val: str = "1") -> str:
         if value in ("2", "special"):
             return "Special"
         if value in ("3", "custom"):
-            description = typer.prompt("  Description").strip()
+            description = typer.prompt("  Custom Description text").strip()
             if description:
                 return description
-            typer.echo("  ✗ Description cannot be empty.")
+            typer.echo("  ✗ Description text cannot be empty.")
             continue
 
-        typer.echo("  ✗ Choose 1, 2, or 3.")
+        typer.echo("  ✗ Please enter 1 for Regular, 2 for Special, or 3 for Custom.")
 
 
 def parse_price(value: str) -> int:
@@ -180,10 +182,10 @@ def parse_price(value: str) -> int:
     try:
         amount = Decimal(value)
     except InvalidOperation:
-        raise ValueError("Enter a valid price, such as 70 or 70.50.")
+        raise ValueError("Enter a valid price in Rupees (e.g. 70 or 70.50).")
 
     if not amount.is_finite():
-        raise ValueError("Price must be a normal number.")
+        raise ValueError("Price must be a valid number.")
 
     if amount < 0:
         raise ValueError("Price cannot be negative.")
@@ -196,9 +198,9 @@ def parse_price(value: str) -> int:
 
 
 def prompt_price(default_val: str = "70") -> int:
-    """Prompt for a price in Rupees."""
+    """Prompt for a price in Rupees with clear default guidance."""
     while True:
-        value = typer.prompt("  Price (₹)", default=default_val)
+        value = typer.prompt("  Price in Rupees (₹) [e.g. 70 or 70.50]", default=default_val)
         try:
             return parse_price(value)
         except ValueError as error:
@@ -206,15 +208,15 @@ def prompt_price(default_val: str = "70") -> int:
 
 
 def prompt_person(people: list[tuple[int, str]]) -> tuple[int, str]:
-    """Interactively select a person from the list of people."""
+    """Interactively select a person from the list of people with clear directions."""
     typer.echo("\nSelect Person:")
     for idx, (person_id, name) in enumerate(people, start=1):
         typer.echo(f"  {idx}. {name}")
 
     while True:
-        value = typer.prompt("Enter person number", default="1").strip()
+        value = typer.prompt(f"Select Person Number [1 to {len(people)}]", default="1").strip()
         if value.isdigit():
             num = int(value)
             if 1 <= num <= len(people):
                 return people[num - 1]
-        typer.echo(f"✗ Please enter a number between 1 and {len(people)}.")
+        typer.echo(f"✗ Please enter a valid person number between 1 and {len(people)}.")

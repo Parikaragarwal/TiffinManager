@@ -215,7 +215,7 @@ def show_month_report(report_data: dict, period_label: str) -> None:
     console.print()
     header_panel = (
         f"[bold cyan]📊 Tiffin Analytics & Consumption Report[/bold cyan]\n"
-        f"[dim]{period_label}[/dim]\n\n"
+        f"[dim]Scope: {period_label}[/dim]\n\n"
         f"• Total Tiffins Consumed: [bold yellow]{overview['tiffins']}[/bold yellow] "
         f"(Regular: {overview['regular']}, Special: {overview['special']})\n"
         f"• Total Consumption Charges: [bold green]{format_rupees(overview['cost_paise'])}[/bold green]"
@@ -255,7 +255,7 @@ def show_month_report(report_data: dict, period_label: str) -> None:
         box=box.ROUNDED,
         header_style="bold magenta",
     )
-    meals_table.add_column("Meal", style="bold capitalize")
+    meals_table.add_column("Meal", style="bold magenta")
     meals_table.add_column("Sessions Recorded", justify="center")
     meals_table.add_column("Tiffins Consumed", justify="center", style="yellow")
     meals_table.add_column("Total Cost", justify="right", style="bold green")
@@ -279,7 +279,7 @@ def show_month_report(report_data: dict, period_label: str) -> None:
             header_style="bold yellow",
         )
         specials_table.add_column("Date", style="dim")
-        specials_table.add_column("Meal", style="capitalize")
+        specials_table.add_column("Meal", style="bold cyan")
         specials_table.add_column("Person", style="bold white")
         specials_table.add_column("Price", justify="right", style="bold green")
 
@@ -361,7 +361,7 @@ def show_bill(bill_data: dict) -> None:
 
     table = Table(title=f"Consumption History ({bill_data['tiffins_count']} Tiffins)", box=box.ROUNDED, header_style="bold blue")
     table.add_column("Date", style="dim")
-    table.add_column("Meal", style="capitalize")
+    table.add_column("Meal", style="bold cyan")
     table.add_column("Description")
     table.add_column("Price", justify="right", style="bold green")
 
@@ -492,3 +492,98 @@ def show_whatsapp_summary(summary_text: str) -> None:
             box=box.ROUNDED,
         )
     )
+
+
+def show_help_manual() -> None:
+    """Display a rich, simple-to-understand CLI Man Page & User Reference Manual."""
+    console.print()
+    title_banner = Panel(
+        "[bold green]🍱 TIFFIN CLI — USER MANUAL & REFERENCE GUIDE[/bold green]\n"
+        "[dim]Simple, elegant, and powerful personal tiffin tracking[/dim]",
+        border_style="green",
+        box=box.ROUNDED,
+    )
+    console.print(title_banner)
+
+    # Command Table
+    cmd_table = Table(
+        title="📖 Available Commands",
+        box=box.ROUNDED,
+        header_style="bold cyan",
+    )
+    cmd_table.add_column("Command", style="bold yellow")
+    cmd_table.add_column("Syntax", style="bold white")
+    cmd_table.add_column("Description", style="dim white")
+
+    cmd_table.add_row(
+        "record",
+        "tiffin record",
+        "Interactively record lunch/dinner attendance and prices for everyone on a given date.",
+    )
+    cmd_table.add_row(
+        "today",
+        "tiffin today",
+        "Quick shortcut to inspect today's meal status or record current meal if unrecorded.",
+    )
+    cmd_table.add_row(
+        "edit",
+        "tiffin edit [date]",
+        "Modify or fix existing recorded entries for any date and meal.",
+    )
+    cmd_table.add_row(
+        "status",
+        "tiffin status [date]",
+        "View daily attendance table and cost breakdown for a date.",
+    )
+    cmd_table.add_row(
+        "settle",
+        "tiffin settle",
+        "Record payment transactions and clear dues for any person.",
+    )
+    cmd_table.add_row(
+        "audit",
+        "tiffin audit",
+        "View chronological settlement payment audit trail.",
+    )
+    cmd_table.add_row(
+        "bill",
+        "tiffin bill [name]",
+        "Show overall financial balance statement or individual itemized invoice.",
+    )
+    cmd_table.add_row(
+        "report",
+        "tiffin report [--scope unsettled|month|all]",
+        "Analytics consumption report. Defaults to unsettled dues period.",
+    )
+    cmd_table.add_row(
+        "missing",
+        "tiffin missing",
+        "Audit missing/unrecorded dates in the current month.",
+    )
+    cmd_table.add_row(
+        "export",
+        "tiffin export [--type csv|whatsapp]",
+        "Export billing & consumption report to CSV or WhatsApp text format.",
+    )
+    cmd_table.add_row(
+        "help",
+        "tiffin help",
+        "Display this comprehensive user manual & reference guide.",
+    )
+
+    console.print(cmd_table)
+
+    # Shortcut Hints Panel
+    hints_text = (
+        "[bold cyan]💡 Format Guidance & Input Directions:[/bold cyan]\n\n"
+        "• [bold yellow]Dates:[/bold yellow] Accepts [bold]today[/bold], [bold]yesterday[/bold], day number e.g. [bold]2[/bold], [bold]2/9[/bold] (2nd Sep), or ISO [bold]2026-09-02[/bold].\n"
+        "• [bold yellow]Prices:[/bold yellow] Accepts [bold]70[/bold] (₹70), [bold]70.50[/bold] (₹70.50), or [bold]₹70[/bold]. Defaults to ₹70.\n"
+        "• [bold yellow]Meals:[/bold yellow] Type [bold]1[/bold] for Lunch, [bold]2[/bold] for Dinner.\n"
+        "• [bold yellow]Types:[/bold yellow] Type [bold]1[/bold] for Regular (₹70), [bold]2[/bold] for Special, [bold]3[/bold] for Custom text.\n"
+        "• [bold yellow]Report Scopes:[/bold yellow]\n"
+        "   - [bold]unsettled[/bold] (default): From earliest un-cleared consumption to today.\n"
+        "   - [bold]month[/bold]: 1st of current month to end of current month.\n"
+        "   - [bold]all[/bold]: Entire history in the database."
+    )
+
+    console.print(Panel(hints_text, title="Keyboard Shortcuts & Hints", border_style="cyan", box=box.ROUNDED))

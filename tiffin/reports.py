@@ -30,6 +30,41 @@ def get_day_status(record_date: str) -> dict:
     return result
 
 
+def get_unsettled_date_range() -> tuple[str, str, str]:
+    """
+    Find the date range covering all unsettled dues period up to today.
+    Identifies the earliest recorded date where total consumption charges exceeded total settlements.
+    """
+    connection = get_connection()
+
+    # Find earliest date in consumption
+    earliest_row = connection.execute("SELECT MIN(date) FROM consumption").fetchone()
+    connection.close()
+
+    today_str = date.today().isoformat()
+    if not earliest_row or not earliest_row[0]:
+        start_date = date(date.today().year, date.today().month, 1).isoformat()
+        return start_date, today_str, "Current Month (No Prior Records)"
+
+    start_date = earliest_row[0]
+    return start_date, today_str, f"Unsettled Dues Period ({start_date} to {today_str})"
+
+
+def get_all_time_date_range() -> tuple[str, str, str]:
+    """Find the full date range for all records in the database."""
+    connection = get_connection()
+    row = connection.execute("SELECT MIN(date), MAX(date) FROM consumption").fetchone()
+    connection.close()
+
+    today_str = date.today().isoformat()
+    if not row or not row[0]:
+        return today_str, today_str, "All Time (Empty DB)"
+
+    start_date = row[0]
+    end_date = row[1] or today_str
+    return start_date, end_date, f"All Time History ({start_date} to {end_date})"
+
+
 def get_month_report(
     start_date: str,
     end_date: str,
@@ -186,28 +221,32 @@ def get_missing_records(year: int | None = None, month: int | None = None) -> li
                 "missing_meals": missing_meals,
             })
 
-        current_day += date.resolution  # timedelta(days=1)
+        current_day += date.resolution
 
     return missing
 
 
-def parse_date_range(period_str: str | None = None) -> tuple[str, str, str]:
+def parse_date_range(period_str: str | None = None, scope: str = "unsettled") -> tuple[str, str, str]:
     """
-    Parse a period string into (start_date, end_date, display_label).
-    Defaults to current month if None or empty.
-    Supports:
-        "2026-09"
-        "september" / "sep"
-        "2026-09-01:2026-09-30"
+    Parse a period string or scope into (start_date, end_date, display_label).
+    If no period_str provided:
+        - scope="unsettled" (default) -> earliest un-cleared consumption to today
+        - scope="month"               -> start of current month to end of current month
+        - scope="all"                 -> earliest record to latest record in DB
     """
     today = date.today()
     if not period_str:
-        year, month = today.year, today.month
-        _, last_day = monthrange(year, month)
-        start = date(year, month, 1).isoformat()
-        end = date(year, month, last_day).isoformat()
-        label = date(year, month, 1).strftime("%B %Y")
-        return start, end, label
+        if scope == "all":
+            return get_all_time_date_range()
+        if scope == "month":
+            year, month = today.year, today.month
+            _, last_day = monthrange(year, month)
+            start = date(year, month, 1).isoformat()
+            end = date(year, month, last_day).isoformat()
+            label = date(year, month, 1).strftime("%B %Y")
+            return start, end, label
+        # Default: unsettled period
+        return get_unsettled_date_range()
 
     period_str = period_str.strip().lower()
 
@@ -255,7 +294,5 @@ def parse_date_range(period_str: str | None = None) -> tuple[str, str, str]:
     except ValueError:
         pass
 
-    # Default fallback: assume current month
-    year, month = today.year, today.month
-    _, last_day = monthrange(year, month)
-    return date(year, month, 1).isoformat(), date(year, month, last_day).isoformat(), f"{today.strftime('%B %Y')}"
+    # Fallback to unsettled range
+    return get_unsettled_date_range()
