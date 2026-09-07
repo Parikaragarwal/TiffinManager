@@ -182,6 +182,28 @@ def save_consumption(
     connection.close()
 
 
+def delete_consumption_record(record_date: str, meal: str | None = None) -> int:
+    """Delete consumption records for a date (and optional specific meal). Returns deleted row count."""
+    connection = get_connection()
+
+    if meal:
+        cursor = connection.execute(
+            "DELETE FROM consumption WHERE date = ? AND meal = ?",
+            (record_date, meal),
+        )
+    else:
+        cursor = connection.execute(
+            "DELETE FROM consumption WHERE date = ?",
+            (record_date,),
+        )
+
+    deleted_count = cursor.rowcount
+    connection.commit()
+    connection.close()
+
+    return deleted_count
+
+
 def get_consumption_for_date(record_date: str) -> list[tuple]:
     """Get all consumption records for a single date."""
     connection = get_connection()

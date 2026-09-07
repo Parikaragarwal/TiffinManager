@@ -1,4 +1,7 @@
 from datetime import date
+import os
+import sys
+
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -18,6 +21,12 @@ def format_rupees(paise: int | None) -> str:
 def display_date(value: str) -> str:
     """Convert YYYY-MM-DD into a human-friendly date."""
     parsed = date.fromisoformat(value)
+    return f"{parsed.strftime('%b')} {parsed.day}"
+
+
+def display_full_date(value: str) -> str:
+    """Convert YYYY-MM-DD into full date."""
+    parsed = date.fromisoformat(value)
     return f"{parsed.strftime('%B')} {parsed.day}, {parsed.year}"
 
 
@@ -29,7 +38,7 @@ def show_review(
     console.print()
 
     table = Table(
-        title=f"🍱 Review Meal ({meal.capitalize()}) - {display_date(record_date)}",
+        title=f"🍱 Review Meal ({meal.capitalize()}) - {display_full_date(record_date)}",
         box=box.ROUNDED,
         header_style="bold cyan",
     )
@@ -80,7 +89,7 @@ def show_saved_summary(
     special_count = 0
 
     table = Table(
-        title=f"✓ Recorded: {meal.capitalize()} ({display_date(record_date)})",
+        title=f"✓ Recorded: {meal.capitalize()} ({display_full_date(record_date)})",
         box=box.ROUNDED,
         header_style="bold green",
     )
@@ -132,14 +141,14 @@ def show_status(record_date: str, status: dict) -> None:
     """Display the status and analysis for one day."""
     if not status["lunch"] and not status["dinner"]:
         console.print(
-            f"\n[yellow]⚠ No records exist for {display_date(record_date)}.[/yellow]"
+            f"\n[yellow]⚠ No records exist for {display_full_date(record_date)}.[/yellow]"
         )
         return
 
     console.print()
     console.print(
         Panel(
-            f"[bold cyan]🍱 Tiffin Status for {display_date(record_date)}[/bold cyan]",
+            f"[bold cyan]🍱 Tiffin Status for {display_full_date(record_date)}[/bold cyan]",
             box=box.ROUNDED,
             border_style="cyan",
         )
@@ -209,75 +218,92 @@ def show_status(record_date: str, status: dict) -> None:
 
 
 def show_month_report(report_data: dict, period_label: str) -> None:
-    """Display comprehensive report for a month or date range."""
-    overview = report_data["overview"]
+    """Display massively detailed report matching the exact 6-section specification."""
+    ov = report_data["overview"]
+    lvd = report_data["lunch_vs_dinner"]
 
     console.print()
-    header_panel = (
-        f"[bold cyan]📊 Tiffin Analytics & Consumption Report[/bold cyan]\n"
-        f"[dim]Scope: {period_label}[/dim]\n\n"
-        f"• Total Tiffins Consumed: [bold yellow]{overview['tiffins']}[/bold yellow] "
-        f"(Regular: {overview['regular']}, Special: {overview['special']})\n"
-        f"• Total Consumption Charges: [bold green]{format_rupees(overview['cost_paise'])}[/bold green]"
+    console.print(
+        Panel(
+            f"[bold green]🍱 {period_label} Report[/bold green]",
+            border_style="green",
+            box=box.ROUNDED,
+        )
     )
-    console.print(Panel(header_panel, border_style="cyan", box=box.ROUNDED))
 
-    # People Breakdown Table
-    people_table = Table(
-        title="👥 Breakdown by Person",
-        box=box.ROUNDED,
-        header_style="bold blue",
-    )
+    # 1. Overview Section
+    ov_lines = [
+        f"Recorded lunches:       [bold]{ov['recorded_lunches']}[/bold]",
+        f"Recorded dinners:      [bold]{ov['recorded_dinners']}[/bold]",
+        "",
+        f"Total tiffins:         [bold yellow]{ov['total_tiffins']}[/bold yellow]",
+        f"Regular:               [bold]{ov['regular']}[/bold]",
+        f"Special:               [bold yellow]{ov['special']}[/bold yellow]",
+        f"Total cost:          [bold green]{format_rupees(ov['total_cost_paise'])}[/bold green]",
+        f"Average / tiffin:    [bold green]{format_rupees(ov['avg_per_tiffin_paise'])}[/bold green]",
+    ]
+    console.print(Panel("\n".join(ov_lines), title="Overview", border_style="cyan", box=box.ROUNDED))
+
+    # 2. Lunch vs Dinner Section
+    lvd_table = Table(title="Lunch vs Dinner Comparison", box=box.ROUNDED, header_style="bold magenta")
+    lvd_table.add_column("Metric", style="bold white")
+    lvd_table.add_column("Lunch", justify="right", style="cyan")
+    lvd_table.add_column("Dinner", justify="right", style="magenta")
+
+    lvd_table.add_row("Tiffins", str(lvd["lunch"]["tiffins"]), str(lvd["dinner"]["tiffins"]))
+    lvd_table.add_row("Regular", str(lvd["lunch"]["regular"]), str(lvd["dinner"]["regular"]))
+    lvd_table.add_row("Special", str(lvd["lunch"]["special"]), str(lvd["dinner"]["special"]))
+    lvd_table.add_row("Cost", format_rupees(lvd["lunch"]["cost_paise"]), format_rupees(lvd["dinner"]["cost_paise"]))
+
+    console.print(lvd_table)
+
+    # 3. People Section
+    people_table = Table(title="People Breakdown", box=box.ROUNDED, header_style="bold blue")
     people_table.add_column("Person", style="bold white")
-    people_table.add_column("Total Tiffins", justify="center", style="yellow")
     people_table.add_column("Lunch", justify="center")
     people_table.add_column("Dinner", justify="center")
-    people_table.add_column("Regular", justify="center")
-    people_table.add_column("Special", justify="center")
-    people_table.add_column("Total Cost", justify="right", style="bold green")
+    people_table.add_column("Total", justify="center", style="yellow")
+    people_table.add_column("Special", justify="center", style="bold yellow")
+    people_table.add_column("Cost", justify="right", style="bold green")
 
     for p_id, p_data in report_data["people"].items():
         people_table.add_row(
             p_data["name"],
-            str(p_data["tiffins"]),
             str(p_data["lunch"]),
             str(p_data["dinner"]),
-            str(p_data["regular"]),
+            str(p_data["tiffins"]),
             str(p_data["special"]),
             format_rupees(p_data["cost_paise"]),
         )
 
     console.print(people_table)
 
-    # Meals Breakdown Table
-    meals_table = Table(
-        title="🍱 Meal Type Summary",
-        box=box.ROUNDED,
-        header_style="bold magenta",
-    )
-    meals_table.add_column("Meal", style="bold magenta")
-    meals_table.add_column("Sessions Recorded", justify="center")
-    meals_table.add_column("Tiffins Consumed", justify="center", style="yellow")
-    meals_table.add_column("Total Cost", justify="right", style="bold green")
+    # 4. Daily Breakdown Section
+    daily_table = Table(title="Daily Breakdown", box=box.ROUNDED, header_style="bold yellow")
+    daily_table.add_column("Date", style="bold white")
+    daily_table.add_column("Lunch", justify="center")
+    daily_table.add_column("Dinner", justify="center")
+    daily_table.add_column("Total", justify="center", style="yellow")
+    daily_table.add_column("Cost", justify="right", style="bold green")
 
-    for meal_name, m_data in report_data["meals"].items():
-        meals_table.add_row(
-            meal_name.capitalize(),
-            str(m_data["recorded"]),
-            str(m_data["tiffins"]),
-            format_rupees(m_data["cost_paise"]),
-        )
+    daily_dict = report_data.get("daily", {})
+    if daily_dict:
+        for d_str, d_data in daily_dict.items():
+            l_str = str(d_data["lunch_tiffins"]) if d_data["lunch_recorded"] else "-"
+            d_str_val = str(d_data["dinner_tiffins"]) if d_data["dinner_recorded"] else "-"
+            daily_table.add_row(
+                display_date(d_str),
+                l_str,
+                d_str_val,
+                str(d_data["total_tiffins"]),
+                format_rupees(d_data["cost_paise"]),
+            )
+        console.print(daily_table)
 
-    console.print(meals_table)
-
-    # Special Items Table if any
+    # 5. Special Tiffins Section
     specials = report_data.get("specials", [])
     if specials:
-        specials_table = Table(
-            title="★ Special Meals List",
-            box=box.ROUNDED,
-            header_style="bold yellow",
-        )
+        specials_table = Table(title="Special Tiffins", box=box.ROUNDED, header_style="bold yellow")
         specials_table.add_column("Date", style="dim")
         specials_table.add_column("Meal", style="bold cyan")
         specials_table.add_column("Person", style="bold white")
@@ -290,15 +316,27 @@ def show_month_report(report_data: dict, period_label: str) -> None:
                 s["name"],
                 format_rupees(s["price_paise"]),
             )
-
         console.print(specials_table)
+
+    # 6. Unrecorded Section
+    unrecorded = report_data.get("unrecorded", [])
+    if unrecorded:
+        un_table = Table(title="Unrecorded Meals", box=box.ROUNDED, header_style="bold red")
+        un_table.add_column("Date", style="bold white")
+        un_table.add_column("Meal", style="bold red")
+
+        for item in unrecorded:
+            un_table.add_row(
+                display_date(item["date"]),
+                item["meal"].capitalize(),
+            )
+        console.print(un_table)
 
 
 def show_bill(bill_data: dict) -> None:
     """Display overall billing balance or itemized person bill."""
     console.print()
 
-    # If overall summary bill
     if "balances" in bill_data:
         console.print(
             Panel(
@@ -349,7 +387,6 @@ def show_bill(bill_data: dict) -> None:
         console.print(Panel(summary_box, title="Total Balance Summary", border_style="yellow", box=box.ROUNDED))
         return
 
-    # Itemized single person bill
     name = bill_data["name"]
     console.print(
         Panel(
@@ -383,7 +420,7 @@ def show_bill(bill_data: dict) -> None:
 
         for s in bill_data["settlements"]:
             settle_table.add_row(
-                display_date(s["settled_date"]),
+                display_full_date(s["settled_date"]),
                 format_rupees(s["amount_paise"]),
                 s["notes"] or "—",
             )
@@ -432,7 +469,7 @@ def show_audit_log(settlements: list[dict]) -> None:
         total_settled += s["amount_paise"]
         table.add_row(
             str(s["id"]),
-            display_date(s["settled_date"]),
+            display_full_date(s["settled_date"]),
             s["person_name"],
             format_rupees(s["amount_paise"]),
             s["notes"] or "—",
@@ -466,7 +503,7 @@ def show_missing_records(missing_list: list[dict]) -> None:
     for item in missing_list:
         meals_str = ", ".join(m.capitalize() for m in item["missing_meals"])
         table.add_row(
-            display_date(item["date"]),
+            display_full_date(item["date"]),
             meals_str,
         )
 
@@ -505,7 +542,6 @@ def show_help_manual() -> None:
     )
     console.print(title_banner)
 
-    # Command Table
     cmd_table = Table(
         title="📖 Available Commands",
         box=box.ROUNDED,
@@ -515,75 +551,17 @@ def show_help_manual() -> None:
     cmd_table.add_column("Syntax", style="bold white")
     cmd_table.add_column("Description", style="dim white")
 
-    cmd_table.add_row(
-        "record",
-        "tiffin record",
-        "Interactively record lunch/dinner attendance and prices for everyone on a given date.",
-    )
-    cmd_table.add_row(
-        "today",
-        "tiffin today",
-        "Quick shortcut to inspect today's meal status or record current meal if unrecorded.",
-    )
-    cmd_table.add_row(
-        "edit",
-        "tiffin edit [date]",
-        "Modify or fix existing recorded entries for any date and meal.",
-    )
-    cmd_table.add_row(
-        "status",
-        "tiffin status [date]",
-        "View daily attendance table and cost breakdown for a date.",
-    )
-    cmd_table.add_row(
-        "settle",
-        "tiffin settle",
-        "Record payment transactions and clear dues for any person.",
-    )
-    cmd_table.add_row(
-        "audit",
-        "tiffin audit",
-        "View chronological settlement payment audit trail.",
-    )
-    cmd_table.add_row(
-        "bill",
-        "tiffin bill [name]",
-        "Show overall financial balance statement or individual itemized invoice.",
-    )
-    cmd_table.add_row(
-        "report",
-        "tiffin report [--scope unsettled|month|all]",
-        "Analytics consumption report. Defaults to unsettled dues period.",
-    )
-    cmd_table.add_row(
-        "missing",
-        "tiffin missing",
-        "Audit missing/unrecorded dates in the current month.",
-    )
-    cmd_table.add_row(
-        "export",
-        "tiffin export [--type csv|whatsapp]",
-        "Export billing & consumption report to CSV or WhatsApp text format.",
-    )
-    cmd_table.add_row(
-        "help",
-        "tiffin help",
-        "Display this comprehensive user manual & reference guide.",
-    )
+    cmd_table.add_row("record", "tiffin record", "Interactively record lunch/dinner attendance for a date.")
+    cmd_table.add_row("today", "tiffin today", "Shortcut to inspect or record today's meal status.")
+    cmd_table.add_row("edit", "tiffin edit", "Modify existing recorded entries for any date and meal.")
+    cmd_table.add_row("delete", "tiffin delete", "Delete records for a specific date (requires admin/sudo).")
+    cmd_table.add_row("status", "tiffin status", "View daily attendance table and cost breakdown.")
+    cmd_table.add_row("settle", "tiffin settle", "Record payment transactions and clear dues.")
+    cmd_table.add_row("audit", "tiffin audit", "View chronological settlement payment audit log.")
+    cmd_table.add_row("bill", "tiffin bill", "Show overall billing statement or itemized invoice.")
+    cmd_table.add_row("report", "tiffin report", "Detailed 6-section analytics consumption report.")
+    cmd_table.add_row("missing", "tiffin missing", "Audit missing/unrecorded dates in the current month.")
+    cmd_table.add_row("export", "tiffin export", "Export report to CSV or WhatsApp text format.")
+    cmd_table.add_row("help", "tiffin help", "Display this user manual.")
 
     console.print(cmd_table)
-
-    # Shortcut Hints Panel
-    hints_text = (
-        "[bold cyan]💡 Format Guidance & Input Directions:[/bold cyan]\n\n"
-        "• [bold yellow]Dates:[/bold yellow] Accepts [bold]today[/bold], [bold]yesterday[/bold], day number e.g. [bold]2[/bold], [bold]2/9[/bold] (2nd Sep), or ISO [bold]2026-09-02[/bold].\n"
-        "• [bold yellow]Prices:[/bold yellow] Accepts [bold]70[/bold] (₹70), [bold]70.50[/bold] (₹70.50), or [bold]₹70[/bold]. Defaults to ₹70.\n"
-        "• [bold yellow]Meals:[/bold yellow] Type [bold]1[/bold] for Lunch, [bold]2[/bold] for Dinner.\n"
-        "• [bold yellow]Types:[/bold yellow] Type [bold]1[/bold] for Regular (₹70), [bold]2[/bold] for Special, [bold]3[/bold] for Custom text.\n"
-        "• [bold yellow]Report Scopes:[/bold yellow]\n"
-        "   - [bold]unsettled[/bold] (default): From earliest un-cleared consumption to today.\n"
-        "   - [bold]month[/bold]: 1st of current month to end of current month.\n"
-        "   - [bold]all[/bold]: Entire history in the database."
-    )
-
-    console.print(Panel(hints_text, title="Keyboard Shortcuts & Hints", border_style="cyan", box=box.ROUNDED))

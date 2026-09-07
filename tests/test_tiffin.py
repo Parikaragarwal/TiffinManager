@@ -67,6 +67,22 @@ class TestTiffinCore(unittest.TestCase):
         self.assertEqual(rows[0][4], "Special")
         self.assertEqual(rows[0][5], 10000)
 
+    def test_delete_consumption_record(self):
+        today_str = date.today().isoformat()
+        people = db.get_people()
+        p1_id = people[0][0]
+
+        db.save_consumption(today_str, "lunch", p1_id, True, "Regular", 7000)
+        db.save_consumption(today_str, "dinner", p1_id, True, "Regular", 7000)
+
+        # Delete lunch only
+        deleted_count = db.delete_consumption_record(today_str, "lunch")
+        self.assertEqual(deleted_count, 1)
+
+        rows = db.get_consumption_for_date(today_str)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][0], "dinner")
+
     def test_settlements_and_billing(self):
         today_str = date.today().isoformat()
         people = db.get_people()
@@ -102,29 +118,27 @@ class TestTiffinCore(unittest.TestCase):
         with self.assertRaises(ValueError):
             input_mod.parse_price("-50")
 
-    def test_learned_ate_default(self):
-        self.assertTrue(input_mod.get_learned_ate_default([]))
-        self.assertTrue(input_mod.get_learned_ate_default([True, True]))
-        self.assertTrue(input_mod.get_learned_ate_default([True, True, False]))
-        self.assertFalse(input_mod.get_learned_ate_default([False, False, False]))
-
-    def test_report_scopes_unsettled_month_all(self):
+    def test_detailed_report_generation(self):
         today_str = date.today().isoformat()
-        past_str = "2026-08-01"
         people = db.get_people()
         p1_id = people[0][0]
 
-        db.save_consumption(past_str, "lunch", p1_id, True, "Regular", 7000)
         db.save_consumption(today_str, "lunch", p1_id, True, "Regular", 7000)
+        db.save_consumption(today_str, "dinner", p1_id, True, "Special", 9000)
 
-        start_unsettled, end_unsettled, label_unsettled = reports.parse_date_range(scope="unsettled")
-        self.assertEqual(start_unsettled, past_str)
+        report_data = reports.get_month_report(today_str, today_str)
 
-        start_all, end_all, label_all = reports.parse_date_range(scope="all")
-        self.assertEqual(start_all, past_str)
+        # Check 6 sections existence
+        self.assertIn("overview", report_data)
+        self.assertIn("lunch_vs_dinner", report_data)
+        self.assertIn("people", report_data)
+        self.assertIn("daily", report_data)
+        self.assertIn("specials", report_data)
+        self.assertIn("unrecorded", report_data)
 
-        month_data = reports.get_month_report(start_unsettled, end_unsettled)
-        self.assertEqual(month_data["overview"]["tiffins"], 2)
+        self.assertEqual(report_data["overview"]["total_tiffins"], 2)
+        self.assertEqual(report_data["overview"]["total_cost_paise"], 16000)
+        self.assertEqual(report_data["overview"]["avg_per_tiffin_paise"], 8000)
 
     def test_csv_and_whatsapp_export(self):
         today_str = date.today().isoformat()

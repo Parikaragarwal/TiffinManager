@@ -1,7 +1,7 @@
 import csv
 from pathlib import Path
 from .billing import get_overall_bill, get_person_bill
-from .formatting import format_rupees, display_date
+from .formatting import format_rupees, display_full_date
 
 
 def export_month_to_csv(report_data: dict, filepath: str | Path) -> Path:
@@ -14,13 +14,14 @@ def export_month_to_csv(report_data: dict, filepath: str | Path) -> Path:
         writer.writerow(["Person ID", "Name", "Total Tiffins", "Lunch", "Dinner", "Regular", "Special", "Cost (Paise)", "Cost (INR)"])
 
         for person_id, data in report_data.get("people", {}).items():
+            regular_cnt = data.get("tiffins", 0) - data.get("special", 0)
             writer.writerow([
                 person_id,
                 data["name"],
                 data["tiffins"],
                 data["lunch"],
                 data["dinner"],
-                data["regular"],
+                regular_cnt,
                 data["special"],
                 data["cost_paise"],
                 f"{data['cost_paise'] / 100:.2f}",
@@ -28,7 +29,17 @@ def export_month_to_csv(report_data: dict, filepath: str | Path) -> Path:
 
         writer.writerow([])
         overview = report_data.get("overview", {})
-        writer.writerow(["TOTAL OVERVIEW", "", overview.get("tiffins", 0), "", "", overview.get("regular", 0), overview.get("special", 0), overview.get("cost_paise", 0), f"{overview.get('cost_paise', 0) / 100:.2f}"])
+        writer.writerow([
+            "TOTAL OVERVIEW",
+            "",
+            overview.get("total_tiffins", 0),
+            overview.get("recorded_lunches", 0),
+            overview.get("recorded_dinners", 0),
+            overview.get("regular", 0),
+            overview.get("special", 0),
+            overview.get("total_cost_paise", 0),
+            f"{overview.get('total_cost_paise', 0) / 100:.2f}",
+        ])
 
     return path
 
