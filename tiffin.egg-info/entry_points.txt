@@ -1,0 +1,2 @@
+[console_scripts]
+tiffin = tiffin.cli:app

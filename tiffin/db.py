@@ -7,8 +7,9 @@ DB_PATH = Path.home() / ".local" / "share" / "tiffin" / "tiffin.db"
 
 def get_connection() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(DB_PATH)
+    connection = sqlite3.connect(DB_PATH, timeout=15.0)
     connection.execute("PRAGMA foreign_keys = ON")
+    connection.execute("PRAGMA journal_mode = WAL")
     return connection
 
 
