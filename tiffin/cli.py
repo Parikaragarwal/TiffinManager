@@ -775,5 +775,62 @@ nohup ~/.tiffin_env/bin/python -m tiffin serve --port {port} > ~/.tiffin_server.
         raise typer.Exit(code=1)
 
 
+@app.command()
+def sync(
+    server_url: str = typer.Option(
+        None,
+        "--url",
+        "-u",
+        help="Target live server URL (defaults to TIFFIN_SERVER_URL env var).",
+    ),
+    secret_key: str = typer.Option(
+        None,
+        "--key",
+        "-k",
+        help="Sync secret token (defaults to TIFFIN_SYNC_KEY env var).",
+    ),
+):
+    """Manually push current local database to live transparent server."""
+    initialize_database()
+    seed_people()
+
+    url = server_url or os.environ.get("TIFFIN_SERVER_URL")
+    key = secret_key or os.environ.get("TIFFIN_SYNC_KEY")
+
+    if not url:
+        console.print("[red]✗ TIFFIN_SERVER_URL is not set. Specify --url https://tiffin.parikar.in or set export TIFFIN_SERVER_URL=...[/red]")
+        raise typer.Exit(code=1)
+
+    console.print(f"\n[bold cyan]🔄 Synchronizing database to {url}...[/bold cyan]")
+
+    import json
+    import urllib.request
+    from .backup import export_db_to_dict
+
+    try:
+        data = export_db_to_dict()
+        json_bytes = json.dumps(data).encode("utf-8")
+        req_url = f"{url.rstrip('/')}/api/sync"
+        headers = {"Content-Type": "application/json"}
+        if key:
+            headers["X-Tiffin-Token"] = key
+
+        req = urllib.request.Request(req_url, data=json_bytes, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            if resp.status == 200:
+                console.print(
+                    Panel(
+                        f"[bold green]✓ Database successfully synced to live server![/bold green]\n[cyan]{url}[/cyan]",
+                        border_style="green",
+                        box=box.ROUNDED,
+                    )
+                )
+            else:
+                console.print(f"[red]✗ Sync failed with status code {resp.status}[/red]")
+    except Exception as err:
+        console.print(f"[red]✗ Sync error: {err}[/red]")
+        raise typer.Exit(code=1)
+
+
 if __name__ == "__main__":
     app()

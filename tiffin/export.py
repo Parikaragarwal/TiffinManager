@@ -194,181 +194,399 @@ def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
         for p_id, _ in people:
             info = r["persons"].get(p_id, {}).get("lunch")
             if not info:
-                l_cells += '<td class="badge-none">—</td>'
+                l_cells += '<td><span class="badge badge-none">—</span></td>'
             elif not info["ate"]:
-                l_cells += '<td class="badge-no">✗ Didn\'t Eat</td>'
+                l_cells += '<td><span class="badge badge-no">✗ Didn\'t Eat</span></td>'
             else:
                 desc = info.get("description") or "Regular"
                 if desc.lower() == "special":
-                    l_cells += '<td class="badge-special">★ Ate (Special)</td>'
+                    l_cells += '<td><span class="badge badge-special">★ Ate (Special)</span></td>'
                 else:
-                    l_cells += '<td class="badge-yes">✓ Ate (Regular)</td>'
+                    l_cells += '<td><span class="badge badge-yes">✓ Ate (Regular)</span></td>'
 
-        table_rows_html += f"<tr><td><strong>{d_str}</strong></td><td><span class=\"meal-tag lunch\">☀️ Lunch</span></td>{l_cells}</tr>"
+        table_rows_html += f"<tr><td><span class=\"date-val\">{d_str}</span></td><td><span class=\"meal-tag lunch\">☀️ Lunch</span></td>{l_cells}</tr>"
 
         # Dinner row
         d_cells = ""
         for p_id, _ in people:
             info = r["persons"].get(p_id, {}).get("dinner")
             if not info:
-                d_cells += '<td class="badge-none">—</td>'
+                d_cells += '<td><span class="badge badge-none">—</span></td>'
             elif not info["ate"]:
-                d_cells += '<td class="badge-no">✗ Didn\'t Eat</td>'
+                d_cells += '<td><span class="badge badge-no">✗ Didn\'t Eat</span></td>'
             else:
                 desc = info.get("description") or "Regular"
                 if desc.lower() == "special":
-                    d_cells += '<td class="badge-special">★ Ate (Special)</td>'
+                    d_cells += '<td><span class="badge badge-special">★ Ate (Special)</span></td>'
                 else:
-                    d_cells += '<td class="badge-yes">✓ Ate (Regular)</td>'
+                    d_cells += '<td><span class="badge badge-yes">✓ Ate (Regular)</span></td>'
 
-        table_rows_html += f'<tr class="dinner-row"><td><small class="dim">{d_str}</small></td><td><span class="meal-tag dinner">🌙 Dinner</span></td>{d_cells}</tr>'
+        table_rows_html += f'<tr class="dinner-row"><td><span class="date-val dim">{d_str}</span></td><td><span class="meal-tag dinner">🌙 Dinner</span></td>{d_cells}</tr>'
 
     stats_cards_html = ""
     for p_id, s in person_stats.items():
         cost_inr = f"₹{s['total_cost_paise'] / 100:.2f}"
         stats_cards_html += f"""
         <div class="card">
-            <h3>{s['name']}</h3>
+            <div class="card-header">
+                <h3>{s['name']}</h3>
+                <span class="total-badge">{cost_inr}</span>
+            </div>
             <div class="stat-num">{s['total_ate']} <small>tiffins</small></div>
             <div class="stat-detail">
-                <span>☀️ Lunch: {s['lunch_ate']}</span> • <span>🌙 Dinner: {s['dinner_ate']}</span><br>
-                <span>★ Special: {s['special_count']}</span> • <span>Total: {cost_inr}</span>
+                <div class="stat-pill">☀️ Lunch: <strong>{s['lunch_ate']}</strong></div>
+                <div class="stat-pill">🌙 Dinner: <strong>{s['dinner_ate']}</strong></div>
+                <div class="stat-pill special-pill">★ Special: <strong>{s['special_count']}</strong></div>
             </div>
         </div>
         """
 
     html_content = f"""<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🍱 Tiffin Transparency Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        :root {{
-            --bg: #0f172a;
-            --panel: #1e293b;
+        :root[data-theme="dark"] {{
+            --bg: #0b0f19;
+            --panel: rgba(22, 30, 46, 0.75);
+            --panel-border: rgba(255, 255, 255, 0.1);
             --text: #f8fafc;
+            --text-sub: #94a3b8;
             --accent: #38bdf8;
-            --green: #4ade80;
-            --yellow: #facc15;
-            --red: #f87171;
-            --dim: #94a3b8;
+            --accent-glow: rgba(56, 189, 248, 0.25);
+            --card-bg: rgba(30, 41, 59, 0.65);
+            --table-header: rgba(15, 23, 42, 0.85);
+            --table-row-alt: rgba(15, 23, 42, 0.4);
+            --badge-yes-bg: rgba(16, 185, 129, 0.15);
+            --badge-yes-text: #34d399;
+            --badge-yes-border: rgba(16, 185, 129, 0.35);
+            --badge-special-bg: rgba(245, 158, 11, 0.18);
+            --badge-special-text: #fbbf24;
+            --badge-special-border: rgba(245, 158, 11, 0.45);
+            --badge-no-bg: rgba(239, 68, 68, 0.15);
+            --badge-no-text: #f87171;
+            --badge-no-border: rgba(239, 68, 68, 0.3);
+            --badge-none-text: #64748b;
         }}
+
+        :root[data-theme="light"] {{
+            --bg: #f1f5f9;
+            --panel: rgba(255, 255, 255, 0.85);
+            --panel-border: rgba(0, 0, 0, 0.08);
+            --text: #0f172a;
+            --text-sub: #64748b;
+            --accent: #0284c7;
+            --accent-glow: rgba(2, 132, 199, 0.15);
+            --card-bg: rgba(255, 255, 255, 0.9);
+            --table-header: #e2e8f0;
+            --table-row-alt: rgba(241, 245, 249, 0.6);
+            --badge-yes-bg: rgba(16, 185, 129, 0.12);
+            --badge-yes-text: #059669;
+            --badge-yes-border: rgba(16, 185, 129, 0.3);
+            --badge-special-bg: rgba(245, 158, 11, 0.14);
+            --badge-special-text: #d97706;
+            --badge-special-border: rgba(245, 158, 11, 0.35);
+            --badge-no-bg: rgba(239, 68, 68, 0.12);
+            --badge-no-text: #dc2626;
+            --badge-no-border: rgba(239, 68, 68, 0.25);
+            --badge-none-text: #94a3b8;
+        }}
+
+        * {{
+            box-sizing: border-box;
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+        }}
+
         body {{
-            font-family: 'Inter', sans-serif;
-            background: var(--bg);
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg);
             color: var(--text);
             margin: 0;
-            padding: 24px;
+            padding: 32px 20px;
+            min-height: 100vh;
         }}
+
+        .container {{
+            max-width: 1240px;
+            margin: 0 auto;
+        }}
+
         header {{
-            text-align: center;
-            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 36px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--panel-border);
         }}
-        h1 {{
-            color: var(--accent);
-            font-size: 2rem;
-            margin: 0 0 8px 0;
+
+        .title-group h1 {{
+            font-size: 2.2rem;
+            font-weight: 800;
+            margin: 0 0 6px 0;
+            background: linear-gradient(135deg, var(--text) 30%, var(--accent) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.02em;
         }}
-        p.subtitle {{
-            color: var(--dim);
+
+        .title-group p {{
             margin: 0;
+            color: var(--text-sub);
+            font-size: 0.95rem;
+            font-weight: 500;
         }}
+
+        .theme-toggle-btn {{
+            background: var(--panel);
+            border: 1px solid var(--panel-border);
+            color: var(--text);
+            padding: 10px 18px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 600;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }}
+        .theme-toggle-btn:hover {{
+            transform: translateY(-2px);
+            border-color: var(--accent);
+        }}
+
         .grid {{
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 16px;
-            margin-bottom: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 36px;
         }}
+
         .card {{
-            background: var(--panel);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 12px;
-            padding: 18px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 22px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
         }}
-        .card h3 {{
-            margin: 0 0 6px 0;
-            color: var(--accent);
+        .card:hover {{
+            transform: translateY(-3px);
+            border-color: var(--accent);
         }}
-        .stat-num {{
-            font-size: 1.8rem;
+
+        .card-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }}
+
+        .card-header h3 {{
+            margin: 0;
+            font-size: 1.25rem;
             font-weight: 700;
-            color: var(--green);
+            color: var(--text);
+        }}
+
+        .total-badge {{
+            background: var(--accent-glow);
+            color: var(--accent);
+            font-weight: 700;
+            font-size: 0.85rem;
+            padding: 4px 10px;
+            border-radius: 999px;
+        }}
+
+        .stat-num {{
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: var(--text);
+            line-height: 1.1;
+            margin-bottom: 14px;
         }}
         .stat-num small {{
-            font-size: 0.9rem;
-            color: var(--dim);
+            font-size: 0.95rem;
+            color: var(--text-sub);
+            font-weight: 500;
         }}
+
         .stat-detail {{
-            font-size: 0.85rem;
-            color: var(--dim);
-            margin-top: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
         }}
+
+        .stat-pill {{
+            background: var(--table-header);
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            color: var(--text-sub);
+            font-weight: 500;
+        }}
+        .special-pill {{
+            color: var(--badge-special-text);
+        }}
+
         .table-container {{
             background: var(--panel);
-            border-radius: 12px;
-            overflow-x: auto;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+            backdrop-filter: blur(12px);
+            border-radius: 20px;
+            border: 1px solid var(--panel-border);
+            overflow: hidden;
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.15);
         }}
+
         table {{
             width: 100%;
             border-collapse: collapse;
             text-align: center;
         }}
+
         th, td {{
-            padding: 12px 16px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 14px 18px;
+            font-size: 0.92rem;
         }}
+
         th {{
-            background: rgba(0,0,0,0.3);
+            background: var(--table-header);
             color: var(--accent);
-            font-weight: 600;
+            font-weight: 700;
+            font-size: 0.95rem;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
         }}
+
+        td {{
+            border-bottom: 1px solid var(--panel-border);
+        }}
+
         tr.dinner-row {{
-            background: rgba(0,0,0,0.15);
+            background-color: var(--table-row-alt);
         }}
+
+        .date-val {{
+            font-weight: 700;
+            color: var(--text);
+        }}
+
         .meal-tag {{
-            font-size: 0.85rem;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-weight: 600;
+            font-size: 0.82rem;
+            padding: 5px 12px;
+            border-radius: 999px;
+            font-weight: 700;
+            display: inline-block;
         }}
-        .meal-tag.lunch {{ background: rgba(56, 189, 248, 0.15); color: var(--accent); }}
-        .meal-tag.dinner {{ background: rgba(168, 85, 247, 0.15); color: #c084fc; }}
-        .badge-yes {{ color: var(--green); font-weight: 600; }}
-        .badge-special {{ color: var(--yellow); font-weight: 700; }}
-        .badge-no {{ color: var(--red); }}
-        .badge-none {{ color: var(--dim); opacity: 0.5; }}
-        .dim {{ color: var(--dim); }}
+        .meal-tag.lunch {{
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--accent);
+        }}
+        .meal-tag.dinner {{
+            background: rgba(192, 132, 252, 0.15);
+            color: #c084fc;
+        }}
+
+        .badge {{
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            font-weight: 700;
+        }}
+        .badge-yes {{
+            background: var(--badge-yes-bg);
+            color: var(--badge-yes-text);
+            border: 1px solid var(--badge-yes-border);
+        }}
+        .badge-special {{
+            background: var(--badge-special-bg);
+            color: var(--badge-special-text);
+            border: 1px solid var(--badge-special-border);
+            box-shadow: 0 0 12px var(--badge-special-bg);
+        }}
+        .badge-no {{
+            background: var(--badge-no-bg);
+            color: var(--badge-no-text);
+            border: 1px solid var(--badge-no-border);
+        }}
+        .badge-none {{
+            color: var(--badge-none-text);
+        }}
+
+        .dim {{
+            color: var(--text-sub);
+            font-weight: 500;
+        }}
+
+        @media (max-width: 768px) {{
+            body {{ padding: 16px 12px; }}
+            header {{ flex-direction: column; align-items: flex-start; gap: 14px; }}
+        }}
     </style>
 </head>
 <body>
-    <header>
-        <h1>🍱 Tiffin Attendance Transparency Dashboard</h1>
-        <p class="subtitle">Live transparent meal record for flatmates & friends</p>
-    </header>
+    <div class="container">
+        <header>
+            <div class="title-group">
+                <h1>🍱 Tiffin Attendance Transparency Dashboard</h1>
+                <p>Live transparent meal records for flatmates & friends</p>
+            </div>
+            <button class="theme-toggle-btn" onclick="toggleTheme()">
+                <span id="theme-icon">🌙</span> <span id="theme-text">Dark Mode</span>
+            </button>
+        </header>
 
-    <div class="grid">
-        {stats_cards_html}
+        <div class="grid">
+            {stats_cards_html}
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Meal Slot</th>
+                        {table_headers_html}
+                    </tr>
+                </thead>
+                <tbody>
+                    {table_rows_html}
+                </tbody>
+            </table>
+        </div>
     </div>
 
-    <div class="table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Meal</th>
-                    {table_headers_html}
-                </tr>
-            </thead>
-            <tbody>
-                {table_rows_html}
-            </tbody>
-        </table>
-    </div>
+    <script>
+        function setTheme(theme) {{
+            document.documentElement.setAttribute('data-theme', theme);
+            const icon = document.getElementById('theme-icon');
+            const text = document.getElementById('theme-text');
+            if (theme === 'light') {{
+                icon.textContent = '☀️';
+                text.textContent = 'Light Mode';
+            }} else {{
+                icon.textContent = '🌙';
+                text.textContent = 'Dark Mode';
+            }}
+            localStorage.setItem('tiffin-theme', theme);
+        }}
+
+        function toggleTheme() {{
+            const current = document.documentElement.getAttribute('data-theme');
+            setTheme(current === 'light' ? 'dark' : 'light');
+        }}
+
+        const savedTheme = localStorage.getItem('tiffin-theme') || 'dark';
+        setTheme(savedTheme);
+    </script>
 </body>
 </html>
 """
@@ -377,4 +595,5 @@ def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
         f.write(html_content)
 
     return path
+
 
