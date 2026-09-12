@@ -304,3 +304,110 @@ def parse_date_range(period_str: str | None = None, scope: str = "unsettled") ->
         pass
 
     return get_unsettled_date_range()
+
+
+def get_daily_history_matrix(
+    start_date: str,
+    end_date: str,
+    person_filter: str | None = None,
+) -> dict:
+    """Build a detailed daily attendance & meal type matrix for each person in [start_date, end_date]."""
+    rows = get_consumption_between(start_date, end_date)
+    all_people = get_people()
+
+    if person_filter:
+        flt = person_filter.strip().lower()
+        all_people = [p for p in all_people if flt in p[1].lower()]
+
+    people_dict = {p_id: name for p_id, name in all_people}
+
+    # Group consumption by date -> person_id -> meal ('lunch' / 'dinner')
+    matrix = defaultdict(lambda: defaultdict(dict))
+    recorded_dates = set()
+
+    for record_date, meal, person_id, name, ate, description, price_paise in rows:
+        if person_id not in people_dict:
+            continue
+        recorded_dates.add(record_date)
+        matrix[record_date][person_id][meal] = {
+            "ate": bool(ate),
+            "description": description or "Regular",
+            "price_paise": price_paise,
+        }
+
+    date_list = sorted(list(recorded_dates))
+    if not date_list:
+        try:
+            cur_d = date.fromisoformat(start_date)
+            end_d = date.fromisoformat(end_date)
+            while cur_d <= end_d:
+                date_list.append(cur_d.isoformat())
+                cur_d += timedelta(days=1)
+        except ValueError:
+            pass
+
+    person_stats = {
+        p_id: {
+            "name": name,
+            "lunch_ate": 0,
+            "lunch_skipped": 0,
+            "dinner_ate": 0,
+            "dinner_skipped": 0,
+            "total_ate": 0,
+            "regular_count": 0,
+            "special_count": 0,
+            "total_cost_paise": 0,
+        }
+        for p_id, name in all_people
+    }
+
+    formatted_rows = []
+    for d_str in date_list:
+        date_entry = {
+            "date": d_str,
+            "persons": {},
+        }
+        for p_id, p_name in all_people:
+            p_meals = matrix[d_str].get(p_id, {})
+            l_info = p_meals.get("lunch")
+            d_info = p_meals.get("dinner")
+
+            date_entry["persons"][p_id] = {
+                "name": p_name,
+                "lunch": l_info,
+                "dinner": d_info,
+            }
+
+            if l_info:
+                if l_info["ate"]:
+                    person_stats[p_id]["lunch_ate"] += 1
+                    person_stats[p_id]["total_ate"] += 1
+                    person_stats[p_id]["total_cost_paise"] += (l_info["price_paise"] or 0)
+                    if (l_info["description"] or "").strip().lower() == "special":
+                        person_stats[p_id]["special_count"] += 1
+                    else:
+                        person_stats[p_id]["regular_count"] += 1
+                else:
+                    person_stats[p_id]["lunch_skipped"] += 1
+
+            if d_info:
+                if d_info["ate"]:
+                    person_stats[p_id]["dinner_ate"] += 1
+                    person_stats[p_id]["total_ate"] += 1
+                    person_stats[p_id]["total_cost_paise"] += (d_info["price_paise"] or 0)
+                    if (d_info["description"] or "").strip().lower() == "special":
+                        person_stats[p_id]["special_count"] += 1
+                    else:
+                        person_stats[p_id]["regular_count"] += 1
+                else:
+                    person_stats[p_id]["dinner_skipped"] += 1
+
+        formatted_rows.append(date_entry)
+
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "people": all_people,
+        "rows": formatted_rows,
+        "person_stats": person_stats,
+    }

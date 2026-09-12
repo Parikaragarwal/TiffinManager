@@ -182,6 +182,12 @@ def save_consumption(
     connection.commit()
     connection.close()
 
+    try:
+        from .backup import auto_backup
+        auto_backup()
+    except Exception:
+        pass
+
 
 def delete_consumption_record(record_date: str, meal: str | None = None) -> int:
     """Delete consumption records for a date (and optional specific meal). Returns deleted row count."""
@@ -201,6 +207,12 @@ def delete_consumption_record(record_date: str, meal: str | None = None) -> int:
     deleted_count = cursor.rowcount
     connection.commit()
     connection.close()
+
+    try:
+        from .backup import auto_backup
+        auto_backup()
+    except Exception:
+        pass
 
     return deleted_count
 

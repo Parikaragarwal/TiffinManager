@@ -31,6 +31,12 @@ def record_settlement(
     connection.commit()
     connection.close()
 
+    try:
+        from .backup import auto_backup
+        auto_backup()
+    except Exception:
+        pass
+
     return settlement_id
 
 

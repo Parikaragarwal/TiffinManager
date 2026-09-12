@@ -531,6 +531,68 @@ def show_whatsapp_summary(summary_text: str) -> None:
     )
 
 
+def show_history_table(history_data: dict, period_label: str) -> None:
+    """Display daily attendance & meal type matrix for each person in a Rich table."""
+    people = history_data.get("people", [])
+    rows = history_data.get("rows", [])
+    person_stats = history_data.get("person_stats", {})
+
+    if not rows:
+        console.print(f"\n[yellow]⚠ No history records found for {period_label}.[/yellow]")
+        return
+
+    console.print()
+    console.print(
+        Panel(
+            f"[bold cyan]📅 Daily Attendance & Meal History Matrix ({period_label})[/bold cyan]",
+            border_style="cyan",
+            box=box.ROUNDED,
+        )
+    )
+
+    table = Table(box=box.ROUNDED, header_style="bold magenta")
+    table.add_column("Date", style="bold white")
+    table.add_column("Meal", style="bold cyan")
+
+    for _, name in people:
+        table.add_column(name, justify="center")
+
+    def cell_badge(meal_info):
+        if not meal_info:
+            return "[dim]—[/dim]"
+        if not meal_info["ate"]:
+            return "[bold red]✗ Didn't eat[/bold red]"
+        desc = (meal_info.get("description") or "Regular").strip()
+        if desc.lower() == "special":
+            return "[bold yellow]★ Ate (Special)[/bold yellow]"
+        return "[bold green]✓ Ate (Regular)[/bold green]"
+
+    for idx, r in enumerate(rows):
+        d_str = display_date(r["date"])
+
+        # Lunch row
+        lunch_cells = [cell_badge(r["persons"].get(p_id, {}).get("lunch")) for p_id, _ in people]
+        table.add_row(d_str, "[cyan]☀️ Lunch[/cyan]", *lunch_cells)
+
+        # Dinner row
+        dinner_cells = [cell_badge(r["persons"].get(p_id, {}).get("dinner")) for p_id, _ in people]
+        table.add_row("", "[magenta]🌙 Dinner[/magenta]", *dinner_cells, end_section=(idx < len(rows) - 1))
+
+    console.print(table)
+
+    # Summary Panel
+    summary_lines = []
+    for p_id, s in person_stats.items():
+        summary_lines.append(
+            f"• [bold]{s['name']:<12}[/bold] Total Ate: [bold green]{s['total_ate']}[/bold green] "
+            f"(Lunch: {s['lunch_ate']}, Dinner: {s['dinner_ate']}) | "
+            f"Regular: {s['regular_count']}, Special: [bold yellow]{s['special_count']}[/bold yellow] | "
+            f"Cost: [green]{format_rupees(s['total_cost_paise'])}[/green]"
+        )
+
+    console.print(Panel("\n".join(summary_lines), title="Period Summary", border_style="yellow", box=box.ROUNDED))
+
+
 def show_help_manual() -> None:
     """Display a rich, simple-to-understand CLI Man Page & User Reference Manual."""
     console.print()
@@ -556,12 +618,16 @@ def show_help_manual() -> None:
     cmd_table.add_row("edit", "tiffin edit", "Modify existing recorded entries for any date and meal.")
     cmd_table.add_row("delete", "tiffin delete", "Delete records for a specific date (requires admin/sudo).")
     cmd_table.add_row("status", "tiffin status", "View daily attendance table and cost breakdown.")
+    cmd_table.add_row("history", "tiffin history", "Daily attendance & meal type matrix for each person.")
     cmd_table.add_row("settle", "tiffin settle", "Record payment transactions and clear dues.")
     cmd_table.add_row("audit", "tiffin audit", "View chronological settlement payment audit log.")
     cmd_table.add_row("bill", "tiffin bill", "Show overall billing statement or itemized invoice.")
     cmd_table.add_row("report", "tiffin report", "Detailed 6-section analytics consumption report.")
     cmd_table.add_row("missing", "tiffin missing", "Audit missing/unrecorded dates in the current month.")
-    cmd_table.add_row("export", "tiffin export", "Export report to CSV or WhatsApp text format.")
+    cmd_table.add_row("export", "tiffin export", "Export report to CSV, HTML dashboard, or WhatsApp format.")
+    cmd_table.add_row("serve", "tiffin serve", "Run live transparent web dashboard server on local network/VPS.")
+    cmd_table.add_row("backup", "tiffin backup", "Create automatic local & cloud-synced database backup.")
+    cmd_table.add_row("restore", "tiffin restore", "Restore database state from local file or cloud backup.")
     cmd_table.add_row("help", "tiffin help", "Display this user manual.")
 
     console.print(cmd_table)

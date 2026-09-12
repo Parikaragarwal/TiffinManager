@@ -26,12 +26,15 @@ from .billing import (
 )
 from .reports import (
     get_day_status,
+    get_daily_history_matrix,
     get_missing_records,
     get_month_report,
     parse_date_range,
 )
 from .export import (
     export_bill_to_csv,
+    export_history_to_csv,
+    export_history_to_html,
     generate_whatsapp_summary,
 )
 from .formatting import (
@@ -40,6 +43,7 @@ from .formatting import (
     show_audit_log,
     show_bill,
     show_help_manual,
+    show_history_table,
     show_missing_records,
     show_month_report,
     show_review,
@@ -47,6 +51,8 @@ from .formatting import (
     show_status,
     show_whatsapp_summary,
 )
+from .backup import create_db_backup, export_db_to_json, restore_db_from_file
+from .server import run_server, generate_systemd_service, generate_nginx_config
 from .input import (
     get_current_meal,
     get_learned_ate_default,
@@ -469,6 +475,72 @@ def report(
 
 
 @app.command()
+def history(
+    period: str = typer.Option(
+        None,
+        "--period",
+        "-p",
+        help="Period or date range (e.g., '2026-09', 'september', or '2026-09-01:2026-09-30').",
+    ),
+    scope: str = typer.Option(
+        "month",
+        "--scope",
+        "-s",
+        help="Report scope if no period specified: 'month' (default: current month), 'unsettled', or 'all'.",
+    ),
+    from_date: str = typer.Option(
+        None,
+        "--from",
+        "-f",
+        help="Start date (YYYY-MM-DD).",
+    ),
+    to_date: str = typer.Option(
+        None,
+        "--to",
+        "-t",
+        help="End date (YYYY-MM-DD).",
+    ),
+    person: str = typer.Option(
+        None,
+        "--person",
+        "-u",
+        help="Filter attendance history for a specific person.",
+    ),
+    out: str = typer.Option(
+        None,
+        "--out",
+        "-o",
+        help="Directly export daily attendance table to CSV filename.",
+    ),
+):
+    """View daily attendance table with day/night status and meal types (regular vs special) for each person."""
+    initialize_database()
+    seed_people()
+
+    if from_date and to_date:
+        start_date = parse_date(from_date)
+        end_date = parse_date(to_date)
+        label = f"{display_full_date(start_date)} to {display_full_date(end_date)}"
+    else:
+        start_date, end_date, label = parse_date_range(period, scope=scope.lower())
+
+    history_data = get_daily_history_matrix(start_date, end_date, person_filter=person)
+
+    if out:
+        path = export_history_to_csv(history_data, out)
+        console.print(
+            Panel(
+                f"[bold green]✓ Exported daily attendance history to CSV:[/bold green]\n[cyan]{path.resolve()}[/cyan]",
+                border_style="green",
+                box=box.ROUNDED,
+            )
+        )
+        return
+
+    show_history_table(history_data, label)
+
+
+@app.command()
 def missing():
     """Audit unrecorded/missing meal dates for the current month."""
     initialize_database()
@@ -484,25 +556,55 @@ def export(
         "csv",
         "--type",
         "-t",
-        help="Export format: 'csv' or 'whatsapp'.",
+        help="Export format: 'csv' (bill), 'history' (CSV matrix), 'html' (Web dashboard), or 'whatsapp'.",
     ),
     filename: str = typer.Option(
-        "tiffin_bill.csv",
+        None,
         "--out",
         "-o",
-        help="Output CSV filename.",
+        help="Output filename.",
     ),
 ):
-    """Export billing / report to CSV or display WhatsApp text format."""
+    """Export billing / report to CSV, HTML web dashboard, or display WhatsApp text format."""
     initialize_database()
     seed_people()
 
-    if output_type.lower() == "whatsapp":
+    t_type = output_type.lower()
+    if t_type == "whatsapp":
         text = generate_whatsapp_summary()
         show_whatsapp_summary(text)
         return
 
-    path = export_bill_to_csv(filename)
+    if t_type in ("history", "matrix"):
+        out_name = filename or "tiffin_history.csv"
+        start_date, end_date, _ = parse_date_range(scope="month")
+        history_data = get_daily_history_matrix(start_date, end_date)
+        path = export_history_to_csv(history_data, out_name)
+        console.print(
+            Panel(
+                f"[bold green]✓ Exported daily history matrix to CSV:[/bold green]\n[cyan]{path.resolve()}[/cyan]",
+                border_style="green",
+                box=box.ROUNDED,
+            )
+        )
+        return
+
+    if t_type == "html":
+        out_name = filename or "tiffin_history.html"
+        start_date, end_date, _ = parse_date_range(scope="month")
+        history_data = get_daily_history_matrix(start_date, end_date)
+        path = export_history_to_html(history_data, out_name)
+        console.print(
+            Panel(
+                f"[bold green]✓ Exported interactive HTML Web Dashboard:[/bold green]\n[cyan]{path.resolve()}[/cyan]",
+                border_style="green",
+                box=box.ROUNDED,
+            )
+        )
+        return
+
+    out_name = filename or "tiffin_bill.csv"
+    path = export_bill_to_csv(out_name)
     console.print(
         Panel(
             f"[bold green]✓ Exported billing statement to CSV:[/bold green]\n[cyan]{path.resolve()}[/cyan]",
@@ -510,6 +612,167 @@ def export(
             box=box.ROUNDED,
         )
     )
+
+
+@app.command()
+def serve(
+    port: int = typer.Option(
+        8765,
+        "--port",
+        "-p",
+        help="Port to run the live dashboard server on (default: 8765).",
+    ),
+    bg: bool = typer.Option(
+        False,
+        "--bg",
+        "-b",
+        help="Run live web server in the background.",
+    ),
+    systemd: bool = typer.Option(
+        False,
+        "--systemd",
+        help="Generate systemd service file for VPS hosting.",
+    ),
+    nginx: bool = typer.Option(
+        False,
+        "--nginx",
+        help="Generate Nginx reverse proxy configuration for custom domain.",
+    ),
+    domain: str = typer.Option(
+        "tiffin.parikar.in",
+        "--domain",
+        "-d",
+        help="Domain name for Nginx configuration.",
+    ),
+):
+    """Run live transparent web dashboard server for flatmates/friends."""
+    initialize_database()
+    seed_people()
+
+    if systemd:
+        content = generate_systemd_service(port=port)
+        console.print("\n[bold cyan]📋 Systemd Service Configuration (for VPS hosting):[/bold cyan]\n")
+        console.print(Panel(content, title="tiffin-server.service", border_style="cyan", box=box.ROUNDED))
+        console.print("\n[dim]Save this content to /etc/systemd/system/tiffin-server.service on your VPS.[/dim]")
+        return
+
+    if nginx:
+        content = generate_nginx_config(domain=domain, port=port)
+        console.print(f"\n[bold cyan]🌐 Nginx Reverse Proxy Config for {domain}:[/bold cyan]\n")
+        console.print(Panel(content, title=f"/etc/nginx/sites-available/{domain}", border_style="cyan", box=box.ROUNDED))
+        console.print(f"\n[dim]Save this content to /etc/nginx/sites-available/{domain} on your VPS.[/dim]")
+        return
+
+    run_server(port=port, background=bg)
+
+
+@app.command()
+def backup(
+    out: str = typer.Option(
+        None,
+        "--out",
+        "-o",
+        help="Optional destination path for backup JSON file.",
+    )
+):
+    """Create timestamped local & cloud database backup."""
+    initialize_database()
+    seed_people()
+
+    target = create_db_backup(out)
+    console.print(
+        Panel(
+            f"[bold green]✓ Database backup successfully created:[/bold green]\n[cyan]{target.resolve()}[/cyan]",
+            border_style="green",
+            box=box.ROUNDED,
+        )
+    )
+
+
+@app.command()
+def restore(
+    file_path: str = typer.Argument(
+        ...,
+        help="Path to backup file (.db or .json) to restore from.",
+    )
+):
+    """Restore database from a local backup file or JSON dump."""
+    try:
+        restore_db_from_file(file_path)
+        console.print(
+            Panel(
+                f"[bold green]✓ Database successfully restored from backup:[/bold green]\n[cyan]{file_path}[/cyan]",
+                border_style="green",
+                box=box.ROUNDED,
+            )
+        )
+    except Exception as err:
+        console.print(f"[red]✗ Failed to restore database: {err}[/red]")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def deploy(
+    target: str = typer.Argument(
+        ...,
+        help="VPS SSH target (e.g., 'user@your-vps-ip' or 'root@123.45.67.89').",
+    ),
+    port: int = typer.Option(
+        8765,
+        "--port",
+        "-p",
+        help="Port to run live dashboard server on VPS.",
+    ),
+):
+    """1-Click automated deployment to host live transparent server on your VPS via SSH."""
+    import subprocess
+
+    initialize_database()
+    seed_people()
+
+    console.print(f"\n[bold cyan]🚀 Starting 1-Click Automated VPS Deployment to {target}...[/bold cyan]\n")
+
+    setup_script = f"""
+set -e
+mkdir -p ~/.local/share/tiffin/backups
+python3 -m venv ~/.tiffin_env || true
+~/.tiffin_env/bin/pip install --upgrade pip rich typer >/dev/null 2>&1
+~/.tiffin_env/bin/pip install git+https://github.com/parikar/tiffin.git >/dev/null 2>&1 || ~/.tiffin_env/bin/pip install typer rich >/dev/null 2>&1
+
+pkill -f "tiffin serve" || true
+nohup ~/.tiffin_env/bin/python -m tiffin serve --port {port} > ~/.tiffin_server.log 2>&1 &
+"""
+
+    try:
+        console.print("[dim]• Setting up environment and live server on VPS via SSH...[/dim]")
+        proc = subprocess.run(["ssh", target, setup_script], text=True, capture_output=True, timeout=60)
+        if proc.returncode != 0 and "Permission denied" in proc.stderr:
+            console.print(f"[red]✗ SSH connection failed: {proc.stderr.strip()}[/red]")
+            raise typer.Exit(code=1)
+
+        # Upload database
+        console.print("[dim]• Uploading current database state to VPS...[/dim]")
+        db_json = export_db_to_json()
+        upload_script = "cat > ~/.local/share/tiffin/backups/tiffin_backup_latest.json && ~/.tiffin_env/bin/python -c 'from tiffin import backup; backup.restore_db_from_file(\"/home/\" + \"'.split()[0] + \"/.local/share/tiffin/backups/tiffin_backup_latest.json\")' 2>/dev/null || true"
+        subprocess.run(["ssh", target, upload_script], input=db_json, text=True, capture_output=True, timeout=15)
+
+        vps_ip = target.split("@")[-1]
+        console.print(
+            Panel(
+                f"[bold green]✓ 1-Click VPS Deployment Complete![/bold green]\n\n"
+                f"• [bold]Live Website for Friends:[/bold] [cyan]http://{vps_ip}:{port}[/cyan]\n"
+                f"• [bold]Auto-Sync Setting for your laptop:[/bold]\n"
+                f"  Add this to your ~/.bashrc or shell profile:\n"
+                f"  [yellow]export TIFFIN_SERVER_URL=\"http://{vps_ip}:{port}\"[/yellow]\n\n"
+                f"Every time you run [bold]tiffin record[/bold] locally, it will auto-update your VPS live server instantly!",
+                title="🚀 Deployment Successful",
+                border_style="green",
+                box=box.ROUNDED,
+            )
+        )
+    except Exception as err:
+        console.print(f"[red]✗ Deployment error: {err}[/red]")
+        raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":
