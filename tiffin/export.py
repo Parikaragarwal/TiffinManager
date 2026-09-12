@@ -1,4 +1,5 @@
 import csv
+import os
 from pathlib import Path
 from .billing import get_overall_bill, get_person_bill
 from .formatting import format_rupees, display_full_date
@@ -175,59 +176,70 @@ def export_history_to_csv(history_data: dict, filepath: str | Path) -> Path:
 
 
 def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
-    """Generate a responsive glassmorphic HTML web dashboard for meal history transparency."""
+    """Generate a responsive glassmorphic HTML web dashboard with privacy key protection."""
     path = Path(filepath)
     path.parent.mkdir(parents=True, exist_ok=True)
 
     people = history_data.get("people", [])
     rows = history_data.get("rows", [])
     person_stats = history_data.get("person_stats", {})
+    secret_key = os.environ.get("TIFFIN_SYNC_KEY", "eV82FiHpCxWkZcw2CvbZLWDghZcLTk")
 
-    table_headers_html = "".join([f"<th>{p[1]}</th>" for p in people])
+    table_headers_html = "".join([f'<th class="private-col hidden-col">{p[1]}</th>' for p in people])
 
     table_rows_html = ""
+    total_period_tiffins = 0
+
     for r in rows:
         d_str = r["date"]
 
-        # Lunch row
+        # Lunch calculations
         l_cells = ""
+        lunch_count = 0
         for p_id, _ in people:
             info = r["persons"].get(p_id, {}).get("lunch")
             if not info:
-                l_cells += '<td><span class="badge badge-none">—</span></td>'
+                l_cells += '<td class="private-col hidden-col"><span class="badge badge-none">—</span></td>'
             elif not info["ate"]:
-                l_cells += '<td><span class="badge badge-no">✗ Didn\'t Eat</span></td>'
+                l_cells += '<td class="private-col hidden-col"><span class="badge badge-no">✗ Didn\'t Eat</span></td>'
             else:
+                lunch_count += 1
+                total_period_tiffins += 1
                 desc = info.get("description") or "Regular"
                 if desc.lower() == "special":
-                    l_cells += '<td><span class="badge badge-special">★ Ate (Special)</span></td>'
+                    l_cells += '<td class="private-col hidden-col"><span class="badge badge-special">★ Ate (Special)</span></td>'
                 else:
-                    l_cells += '<td><span class="badge badge-yes">✓ Ate (Regular)</span></td>'
+                    l_cells += '<td class="private-col hidden-col"><span class="badge badge-yes">✓ Ate (Regular)</span></td>'
 
-        table_rows_html += f"<tr><td><span class=\"date-val\">{d_str}</span></td><td><span class=\"meal-tag lunch\">☀️ Lunch</span></td>{l_cells}</tr>"
+        lunch_public = f'<span class="public-badge">{lunch_count} Tiffin{"s" if lunch_count != 1 else ""} Taken</span>' if lunch_count > 0 else '<span class="dim">No Tiffins</span>'
+        table_rows_html += f'<tr><td><span class="date-val">{d_str}</span></td><td><span class="meal-tag lunch">☀️ Lunch</span></td><td class="public-col">{lunch_public}</td>{l_cells}</tr>'
 
-        # Dinner row
+        # Dinner calculations
         d_cells = ""
+        dinner_count = 0
         for p_id, _ in people:
             info = r["persons"].get(p_id, {}).get("dinner")
             if not info:
-                d_cells += '<td><span class="badge badge-none">—</span></td>'
+                d_cells += '<td class="private-col hidden-col"><span class="badge badge-none">—</span></td>'
             elif not info["ate"]:
-                d_cells += '<td><span class="badge badge-no">✗ Didn\'t Eat</span></td>'
+                d_cells += '<td class="private-col hidden-col"><span class="badge badge-no">✗ Didn\'t Eat</span></td>'
             else:
+                dinner_count += 1
+                total_period_tiffins += 1
                 desc = info.get("description") or "Regular"
                 if desc.lower() == "special":
-                    d_cells += '<td><span class="badge badge-special">★ Ate (Special)</span></td>'
+                    d_cells += '<td class="private-col hidden-col"><span class="badge badge-special">★ Ate (Special)</span></td>'
                 else:
-                    d_cells += '<td><span class="badge badge-yes">✓ Ate (Regular)</span></td>'
+                    d_cells += '<td class="private-col hidden-col"><span class="badge badge-yes">✓ Ate (Regular)</span></td>'
 
-        table_rows_html += f'<tr class="dinner-row"><td><span class="date-val dim">{d_str}</span></td><td><span class="meal-tag dinner">🌙 Dinner</span></td>{d_cells}</tr>'
+        dinner_public = f'<span class="public-badge">{dinner_count} Tiffin{"s" if dinner_count != 1 else ""} Taken</span>' if dinner_count > 0 else '<span class="dim">No Tiffins</span>'
+        table_rows_html += f'<tr class="dinner-row"><td><span class="date-val dim">{d_str}</span></td><td><span class="meal-tag dinner">🌙 Dinner</span></td><td class="public-col">{dinner_public}</td>{d_cells}</tr>'
 
     stats_cards_html = ""
     for p_id, s in person_stats.items():
         cost_inr = f"₹{s['total_cost_paise'] / 100:.2f}"
         stats_cards_html += f"""
-        <div class="card">
+        <div class="card private-col hidden-col">
             <div class="card-header">
                 <h3>{s['name']}</h3>
                 <span class="total-badge">{cost_inr}</span>
@@ -342,7 +354,13 @@ def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
             font-weight: 500;
         }}
 
-        .theme-toggle-btn {{
+        .header-actions {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }}
+
+        .btn {{
             background: var(--panel);
             border: 1px solid var(--panel-border);
             color: var(--text);
@@ -357,8 +375,13 @@ def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
             gap: 8px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.05);
         }}
-        .theme-toggle-btn:hover {{
+        .btn:hover {{
             transform: translateY(-2px);
+            border-color: var(--accent);
+        }}
+        .btn-accent {{
+            background: var(--accent);
+            color: #0b0f19;
             border-color: var(--accent);
         }}
 
@@ -369,6 +392,30 @@ def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
             margin-bottom: 36px;
         }}
 
+        .public-summary-card {{
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            text-align: center;
+        }}
+        .public-stat-item h4 {{
+            margin: 0 0 6px 0;
+            color: var(--text-sub);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+        }}
+        .public-stat-item .val {{
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: var(--accent);
+        }}
+
         .card {{
             background: var(--card-bg);
             backdrop-filter: blur(12px);
@@ -376,10 +423,6 @@ def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
             border-radius: 16px;
             padding: 22px;
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
-        }}
-        .card:hover {{
-            transform: translateY(-3px);
-            border-color: var(--accent);
         }}
 
         .card-header {{
@@ -494,6 +537,15 @@ def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
             color: #c084fc;
         }}
 
+        .public-badge {{
+            background: var(--accent-glow);
+            color: var(--accent);
+            padding: 5px 12px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 0.85rem;
+        }}
+
         .badge {{
             display: inline-block;
             padding: 6px 14px;
@@ -521,10 +573,58 @@ def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
             color: var(--badge-none-text);
         }}
 
+        .hidden-col {{
+            display: none !important;
+        }}
+
         .dim {{
             color: var(--text-sub);
             font-weight: 500;
         }}
+
+        /* Unlock Modal */
+        .modal-overlay {{
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.75);
+            backdrop-filter: blur(8px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }}
+        .modal-overlay.active {{
+            opacity: 1;
+            pointer-events: auto;
+        }}
+        .modal {{
+            background: var(--panel);
+            border: 1px solid var(--panel-border);
+            border-radius: 20px;
+            padding: 30px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }}
+        .modal h2 {{ margin: 0 0 10px 0; color: var(--accent); }}
+        .modal p {{ color: var(--text-sub); font-size: 0.9rem; margin-bottom: 20px; }}
+        .modal input {{
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 10px;
+            border: 1px solid var(--panel-border);
+            background: var(--bg);
+            color: var(--text);
+            font-size: 1rem;
+            margin-bottom: 18px;
+            outline: none;
+        }}
+        .modal input:focus {{ border-color: var(--accent); }}
+        .modal-buttons {{ display: flex; gap: 10px; justify-content: center; }}
 
         @media (max-width: 768px) {{
             body {{ padding: 16px 12px; }}
@@ -537,12 +637,32 @@ def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
         <header>
             <div class="title-group">
                 <h1>🍱 Tiffin Attendance Transparency Dashboard</h1>
-                <p>Live transparent meal records for flatmates & friends</p>
+                <p>Unbilled active period transparency record</p>
             </div>
-            <button class="theme-toggle-btn" onclick="toggleTheme()">
-                <span id="theme-icon">🌙</span> <span id="theme-text">Dark Mode</span>
-            </button>
+            <div class="header-actions">
+                <button id="unlock-btn" class="btn btn-accent" onclick="openModal()">
+                    🔒 Unlock Itemized Data
+                </button>
+                <button class="btn" onclick="toggleTheme()">
+                    <span id="theme-icon">🌙</span> <span id="theme-text">Dark</span>
+                </button>
+            </div>
         </header>
+
+        <div id="public-summary-card" class="public-summary-card">
+            <div class="public-stat-item">
+                <h4>Active Unbilled Period</h4>
+                <div class="val" style="font-size: 1.4rem; color: var(--text);">{history_data.get('start_date')} to {history_data.get('end_date')}</div>
+            </div>
+            <div class="public-stat-item">
+                <h4>Total Unbilled Tiffins</h4>
+                <div class="val">{total_period_tiffins}</div>
+            </div>
+            <div class="public-stat-item">
+                <h4>Active Flatmates</h4>
+                <div class="val" style="color: var(--badge-yes-text);">{len(people)}</div>
+            </div>
+        </div>
 
         <div class="grid">
             {stats_cards_html}
@@ -554,6 +674,7 @@ def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
                     <tr>
                         <th>Date</th>
                         <th>Meal Slot</th>
+                        <th class="public-col">Day Summary</th>
                         {table_headers_html}
                     </tr>
                 </thead>
@@ -564,18 +685,27 @@ def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
         </div>
     </div>
 
+    <!-- Unlock Modal -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal">
+            <h2>🔑 Itemized Access</h2>
+            <p>Enter secret key to unlock individual person breakdown</p>
+            <input type="password" id="key-input" placeholder="Enter Secret Key" onkeyup="if(event.key==='Enter') verifyKey()">
+            <div class="modal-buttons">
+                <button class="btn btn-accent" onclick="verifyKey()">Unlock</button>
+                <button class="btn" onclick="closeModal()">Cancel</button>
+            </div>
+            <p id="error-msg" style="color: var(--badge-no-text); display: none; margin-top: 12px; font-size: 0.85rem;">Incorrect Secret Key</p>
+        </div>
+    </div>
+
     <script>
+        const SECRET_KEY = "{secret_key}";
+
         function setTheme(theme) {{
             document.documentElement.setAttribute('data-theme', theme);
-            const icon = document.getElementById('theme-icon');
-            const text = document.getElementById('theme-text');
-            if (theme === 'light') {{
-                icon.textContent = '☀️';
-                text.textContent = 'Light Mode';
-            }} else {{
-                icon.textContent = '🌙';
-                text.textContent = 'Dark Mode';
-            }}
+            document.getElementById('theme-icon').textContent = theme === 'light' ? '☀️' : '🌙';
+            document.getElementById('theme-text').textContent = theme === 'light' ? 'Light' : 'Dark';
             localStorage.setItem('tiffin-theme', theme);
         }}
 
@@ -584,8 +714,52 @@ def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
             setTheme(current === 'light' ? 'dark' : 'light');
         }}
 
+        function openModal() {{
+            document.getElementById('modal-overlay').classList.add('active');
+            document.getElementById('key-input').focus();
+        }}
+
+        function closeModal() {{
+            document.getElementById('modal-overlay').classList.remove('active');
+            document.getElementById('error-msg').style.display = 'none';
+        }}
+
+        function unlockUI() {{
+            document.querySelectorAll('.private-col').forEach(el => el.classList.remove('hidden-col'));
+            document.querySelectorAll('.public-col').forEach(el => el.classList.add('hidden-col'));
+            document.getElementById('public-summary-card').style.display = 'none';
+            const btn = document.getElementById('unlock-btn');
+            btn.innerHTML = '🔓 Itemized View Unlocked';
+            btn.onclick = lockUI;
+            sessionStorage.setItem('tiffin-unlocked', 'true');
+        }}
+
+        function lockUI() {{
+            document.querySelectorAll('.private-col').forEach(el => el.classList.add('hidden-col'));
+            document.querySelectorAll('.public-col').forEach(el => el.classList.remove('hidden-col'));
+            document.getElementById('public-summary-card').style.display = 'flex';
+            const btn = document.getElementById('unlock-btn');
+            btn.innerHTML = '🔒 Unlock Itemized Data';
+            btn.onclick = openModal;
+            sessionStorage.removeItem('tiffin-unlocked');
+        }}
+
+        function verifyKey() {{
+            const val = document.getElementById('key-input').value.trim();
+            if (val === SECRET_KEY || !SECRET_KEY) {{
+                closeModal();
+                unlockUI();
+            }} else {{
+                document.getElementById('error-msg').style.display = 'block';
+            }}
+        }}
+
         const savedTheme = localStorage.getItem('tiffin-theme') || 'dark';
         setTheme(savedTheme);
+
+        if (sessionStorage.getItem('tiffin-unlocked') === 'true') {{
+            unlockUI();
+        }}
     </script>
 </body>
 </html>

@@ -791,8 +791,8 @@ def sync(
     ),
 ):
     """Manually push current local database to live transparent server."""
-    initialize_database()
-    seed_people()
+    from .backup import export_db_to_dict, load_env_file
+    load_env_file()
 
     url = server_url or os.environ.get("TIFFIN_SERVER_URL")
     key = secret_key or os.environ.get("TIFFIN_SYNC_KEY")

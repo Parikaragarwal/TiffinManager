@@ -14,7 +14,7 @@ class DynamicDashboardHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             today_str = date.today().isoformat()
-            start_date, end_date, label = parse_date_range(scope="month")
+            start_date, end_date, label = parse_date_range(scope="unsettled")
             history_data = get_daily_history_matrix(start_date, end_date)
 
             temp_html = Path(tempfile.gettempdir()) / "tiffin_live.html"

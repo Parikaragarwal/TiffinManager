@@ -189,8 +189,32 @@ def create_db_backup(destination_path: str | Path | None = None) -> Path:
     return target
 
 
+def load_env_file() -> None:
+    """Auto-load variables from local .env or ~/.local/share/tiffin/.env if present."""
+    search_paths = [
+        Path.cwd() / ".env",
+        Path.home() / ".local" / "share" / "tiffin" / ".env",
+        Path(__file__).parent.parent / ".env",
+    ]
+    for env_path in search_paths:
+        if env_path.exists():
+            try:
+                with open(env_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith("#") and "=" in line:
+                            k, v = line.split("=", 1)
+                            k, v = k.strip(), v.strip().strip("'\"")
+                            if k and k not in os.environ:
+                                os.environ[k] = v
+                break
+            except Exception:
+                pass
+
+
 def auto_backup() -> None:
     """Automatic background backup triggered on any database mutation."""
+    load_env_file()
     try:
         create_db_backup()
     except Exception:
