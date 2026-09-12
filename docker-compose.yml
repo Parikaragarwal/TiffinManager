@@ -1,0 +1,14 @@
+services:
+  tiffin-server:
+    build: .
+    container_name: tiffin_app
+    restart: always
+    ports:
+      - "127.0.0.1:8765:8765"
+    env_file:
+      - .env
+    volumes:
+      - tiffin_data:/root/.local/share/tiffin
+
+volumes:
+  tiffin_data:
