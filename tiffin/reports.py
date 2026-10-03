@@ -31,18 +31,27 @@ def get_day_status(record_date: str) -> dict:
 
 
 def get_unsettled_date_range() -> tuple[str, str, str]:
-    """Find the date range covering all unsettled dues period up to today."""
-    connection = get_connection()
-    earliest_row = connection.execute("SELECT MIN(date) FROM consumption").fetchone()
-    connection.close()
+    """Find the date range covering all unsettled dues (oldest unsettled tiffin to today)."""
+    from .billing import calculate_fifo_tiffin_status, get_people
+
+    all_people = get_people()
+    unsettled_dates = []
+
+    for person_id, _ in all_people:
+        meals, _ = calculate_fifo_tiffin_status(person_id)
+        for m in meals:
+            if m["status"] in ("unsettled", "partially_settled"):
+                unsettled_dates.append(m["date"])
 
     today_str = date.today().isoformat()
-    if not earliest_row or not earliest_row[0]:
+    if not unsettled_dates:
+        # If everything is settled, default to current month
         start_date = date(date.today().year, date.today().month, 1).isoformat()
-        return start_date, today_str, "Current Month"
+        return start_date, today_str, "Current Month (All Dues Settled!)"
 
-    start_date = earliest_row[0]
+    start_date = min(unsettled_dates)
     return start_date, today_str, f"Unsettled Dues Period ({start_date} to {today_str})"
+
 
 
 def get_all_time_date_range() -> tuple[str, str, str]:
@@ -310,8 +319,11 @@ def get_daily_history_matrix(
     start_date: str,
     end_date: str,
     person_filter: str | None = None,
+    include_settled: bool = True,
 ) -> dict:
     """Build a detailed daily attendance & meal type matrix for each person in [start_date, end_date]."""
+    from .billing import calculate_fifo_tiffin_status
+
     rows = get_consumption_between(start_date, end_date)
     all_people = get_people()
 
@@ -321,6 +333,15 @@ def get_daily_history_matrix(
 
     people_dict = {p_id: name for p_id, name in all_people}
 
+    # Pre-calculate FIFO status for each person
+    person_fifo_map = {}
+    for p_id, _ in all_people:
+        meals_tagged, _ = calculate_fifo_tiffin_status(p_id)
+        # Create map (date, meal) -> status info
+        person_fifo_map[p_id] = {
+            (m["date"], m["meal"]): m for m in meals_tagged
+        }
+
     # Group consumption by date -> person_id -> meal ('lunch' / 'dinner')
     matrix = defaultdict(lambda: defaultdict(dict))
     recorded_dates = set()
@@ -328,12 +349,24 @@ def get_daily_history_matrix(
     for record_date, meal, person_id, name, ate, description, price_paise in rows:
         if person_id not in people_dict:
             continue
+
+        fifo_info = person_fifo_map.get(person_id, {}).get((record_date, meal))
+        status = fifo_info["status"] if fifo_info else ("settled" if not ate else "unsettled")
+
+        # If we are strictly excluding settled tiffins and this tiffin was eaten and settled, skip it from Matrix if requested
+        if not include_settled and status == "settled" and ate:
+            continue
+
         recorded_dates.add(record_date)
         matrix[record_date][person_id][meal] = {
             "ate": bool(ate),
             "description": description or "Regular",
             "price_paise": price_paise,
+            "status": status,
+            "amount_settled_paise": fifo_info["amount_settled_paise"] if fifo_info else 0,
+            "remaining_due_paise": fifo_info["remaining_due_paise"] if fifo_info else 0,
         }
+
 
     date_list = sorted(list(recorded_dates))
     if not date_list:

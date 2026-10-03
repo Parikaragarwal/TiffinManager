@@ -10,12 +10,63 @@ from .export import export_history_to_html
 from .reports import get_daily_history_matrix, parse_date_range
 
 
+from urllib.parse import parse_qs, urlparse
+
+
 class DynamicDashboardHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         try:
-            today_str = date.today().isoformat()
-            start_date, end_date, label = parse_date_range(scope="unsettled")
-            history_data = get_daily_history_matrix(start_date, end_date)
+            parsed_url = urlparse(self.path)
+            query_params = parse_qs(parsed_url.query)
+
+            # Extract parameter values
+            month_param = query_params.get("month", [None])[0]
+            scope_param = query_params.get("scope", [None])[0]
+            start_param = query_params.get("start", [None])[0]
+            end_param = query_params.get("end", [None])[0]
+            token_param = query_params.get("token", [None])[0]
+            include_settled_param = query_params.get("include_settled", ["true"])[0].lower() == "true"
+
+            # Check Secret Key authorization
+            expected_token = os.environ.get("TIFFIN_SYNC_KEY")
+            is_admin = False
+            if expected_token and (token_param == expected_token or self.headers.get("X-Tiffin-Token") == expected_token):
+                is_admin = True
+            elif not expected_token:
+                is_admin = True  # If no key set, allow full access
+
+            # Enforce public vs admin controls
+            # If public user attempts custom scope or range without key, default to default public view
+            if not is_admin:
+                # Public users get unsettled dues period or current month only unless simple month requested
+                if start_param and end_param:
+                    period_str = f"{start_param}:{end_param}"
+                elif month_param:
+                    period_str = month_param
+                else:
+                    period_str = None
+                scope = scope_param or "unsettled"
+            else:
+                if start_param and end_param:
+                    period_str = f"{start_param}:{end_param}"
+                elif month_param:
+                    period_str = month_param
+                else:
+                    period_str = None
+                scope = scope_param or "unsettled"
+
+            start_date, end_date, label = parse_date_range(period_str=period_str, scope=scope)
+            
+            # If scope is unsettled, by default exclude settled tiffins from daily matrix
+            include_settled = include_settled_param if is_admin else (scope != "unsettled")
+            
+            history_data = get_daily_history_matrix(
+                start_date, end_date, include_settled=include_settled
+            )
+            history_data["label"] = label
+            history_data["is_admin"] = is_admin
+            history_data["current_scope"] = scope
+            history_data["current_month"] = month_param or ""
 
             temp_html = Path(tempfile.gettempdir()) / "tiffin_live.html"
             export_history_to_html(history_data, temp_html)
@@ -33,6 +84,7 @@ class DynamicDashboardHandler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/plain")
             self.end_headers()
             self.wfile.write(f"Server Error: {err}".encode("utf-8"))
+
 
     def do_POST(self):
         if self.path == "/api/sync":

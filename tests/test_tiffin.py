@@ -210,9 +210,29 @@ class TestTiffinCore(unittest.TestCase):
 
         with open(html_file, "r", encoding="utf-8") as f:
             content = f.read()
-            self.assertIn("Tiffin Attendance Transparency Dashboard", content)
+            self.assertIn("Tiffin Transparency Dashboard", content)
+
+    def test_fifo_settlement_calculation(self):
+        today_str = date.today().isoformat()
+        people = db.get_people()
+        p1_id = people[0][0]
+
+        # Record 2 meals
+        db.save_consumption("2026-09-01", "lunch", p1_id, True, "Regular", 9000)
+        db.save_consumption("2026-09-02", "lunch", p1_id, True, "Regular", 9000)
+
+        # Record partial settlement covering first meal
+        settlement_db.record_settlement(p1_id, 9000, "2026-09-03", "Partial settlement")
+
+        meals, remaining = billing.calculate_fifo_tiffin_status(p1_id)
+        self.assertEqual(len(meals), 2)
+        self.assertEqual(meals[0]["status"], "settled")
+        self.assertEqual(meals[1]["status"], "unsettled")
+        self.assertEqual(remaining, 0)
+
 
     def test_auto_backup_and_restore(self):
+
         from tiffin import backup
 
         today_str = date.today().isoformat()

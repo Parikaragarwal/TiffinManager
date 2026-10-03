@@ -176,7 +176,7 @@ def export_history_to_csv(history_data: dict, filepath: str | Path) -> Path:
 
 
 def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
-    """Generate a responsive glassmorphic HTML web dashboard with privacy key protection."""
+    """Generate a responsive glassmorphic HTML web dashboard with privacy key protection and scope filters."""
     path = Path(filepath)
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -184,6 +184,8 @@ def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
     rows = history_data.get("rows", [])
     person_stats = history_data.get("person_stats", {})
     secret_key = os.environ.get("TIFFIN_SYNC_KEY", "eV82FiHpCxWkZcw2CvbZLWDghZcLTk")
+    label = history_data.get("label", "Tiffin Dashboard")
+    is_admin = history_data.get("is_admin", False)
 
     table_headers_html = "".join([f'<th class="private-col hidden-col">{p[1]}</th>' for p in people])
 
@@ -206,10 +208,18 @@ def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
                 lunch_count += 1
                 total_period_tiffins += 1
                 desc = info.get("description") or "Regular"
+                status = info.get("status", "unsettled")
+                
+                status_suffix = ""
+                if status == "settled":
+                    status_suffix = ' <small class="status-tag settled">Paid</small>'
+                elif status == "partially_settled":
+                    status_suffix = ' <small class="status-tag partial">Partial</small>'
+
                 if desc.lower() == "special":
-                    l_cells += '<td class="private-col hidden-col"><span class="badge badge-special">★ Ate (Special)</span></td>'
+                    l_cells += f'<td class="private-col hidden-col"><span class="badge badge-special">★ Ate (Special){status_suffix}</span></td>'
                 else:
-                    l_cells += '<td class="private-col hidden-col"><span class="badge badge-yes">✓ Ate (Regular)</span></td>'
+                    l_cells += f'<td class="private-col hidden-col"><span class="badge badge-yes">✓ Ate (Regular){status_suffix}</span></td>'
 
         lunch_public = f'<span class="public-badge">{lunch_count} Tiffin{"s" if lunch_count != 1 else ""} Taken</span>' if lunch_count > 0 else '<span class="dim">No Tiffins</span>'
         table_rows_html += f'<tr><td><span class="date-val">{d_str}</span></td><td><span class="meal-tag lunch">☀️ Lunch</span></td><td class="public-col">{lunch_public}</td>{l_cells}</tr>'
@@ -227,10 +237,18 @@ def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
                 dinner_count += 1
                 total_period_tiffins += 1
                 desc = info.get("description") or "Regular"
+                status = info.get("status", "unsettled")
+
+                status_suffix = ""
+                if status == "settled":
+                    status_suffix = ' <small class="status-tag settled">Paid</small>'
+                elif status == "partially_settled":
+                    status_suffix = ' <small class="status-tag partial">Partial</small>'
+
                 if desc.lower() == "special":
-                    d_cells += '<td class="private-col hidden-col"><span class="badge badge-special">★ Ate (Special)</span></td>'
+                    d_cells += f'<td class="private-col hidden-col"><span class="badge badge-special">★ Ate (Special){status_suffix}</span></td>'
                 else:
-                    d_cells += '<td class="private-col hidden-col"><span class="badge badge-yes">✓ Ate (Regular)</span></td>'
+                    d_cells += f'<td class="private-col hidden-col"><span class="badge badge-yes">✓ Ate (Regular){status_suffix}</span></td>'
 
         dinner_public = f'<span class="public-badge">{dinner_count} Tiffin{"s" if dinner_count != 1 else ""} Taken</span>' if dinner_count > 0 else '<span class="dim">No Tiffins</span>'
         table_rows_html += f'<tr class="dinner-row"><td><span class="date-val dim">{d_str}</span></td><td><span class="meal-tag dinner">🌙 Dinner</span></td><td class="public-col">{dinner_public}</td>{d_cells}</tr>'
@@ -252,6 +270,7 @@ def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
             </div>
         </div>
         """
+
 
     html_content = f"""<!DOCTYPE html>
 <html lang="en" data-theme="dark">
@@ -626,9 +645,76 @@ def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
         .modal input:focus {{ border-color: var(--accent); }}
         .modal-buttons {{ display: flex; gap: 10px; justify-content: center; }}
 
+        .status-tag {{
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 700;
+            margin-left: 4px;
+            text-transform: uppercase;
+        }}
+        .status-tag.settled {{
+            background: rgba(16, 185, 129, 0.25);
+            color: #34d399;
+        }}
+        .status-tag.partial {{
+            background: rgba(245, 158, 11, 0.25);
+            color: #fbbf24;
+        }}
+
+        .filter-bar {{
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }}
+        .filter-group {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }}
+        .filter-btn {{
+            background: var(--panel);
+            border: 1px solid var(--panel-border);
+            color: var(--text-sub);
+            padding: 6px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+        }}
+        .filter-btn:hover, .filter-btn.active {{
+            background: var(--accent);
+            color: #0b0f19;
+            border-color: var(--accent);
+        }}
+        .filter-input {{
+            background: var(--bg);
+            border: 1px solid var(--panel-border);
+            color: var(--text);
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            outline: none;
+        }}
+        .filter-input:focus {{
+            border-color: var(--accent);
+        }}
+
         @media (max-width: 768px) {{
             body {{ padding: 16px 12px; }}
             header {{ flex-direction: column; align-items: flex-start; gap: 14px; }}
+            .filter-bar {{ flex-direction: column; align-items: stretch; }}
         }}
     </style>
 </head>
@@ -636,8 +722,8 @@ def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
     <div class="container">
         <header>
             <div class="title-group">
-                <h1>🍱 Tiffin Attendance Transparency Dashboard</h1>
-                <p>Unbilled active period transparency record</p>
+                <h1>🍱 Tiffin Transparency Dashboard</h1>
+                <p>{label}</p>
             </div>
             <div class="header-actions">
                 <button id="unlock-btn" class="btn btn-accent" onclick="openModal()">
@@ -648,6 +734,20 @@ def export_history_to_html(history_data: dict, filepath: str | Path) -> Path:
                 </button>
             </div>
         </header>
+
+        <div class="filter-bar">
+            <div class="filter-group">
+                <span class="dim" style="font-size: 0.85rem; font-weight: 700;">View Scope:</span>
+                <a href="?scope=unsettled" class="filter-btn">Unsettled Dues</a>
+                <a href="?scope=month" class="filter-btn">Current Month</a>
+                <a href="?scope=all" class="filter-btn">All Time</a>
+            </div>
+            <div class="filter-group">
+                <span class="dim" style="font-size: 0.85rem; font-weight: 700;">Filter Month:</span>
+                <input type="month" id="month-picker" class="filter-input" onchange="window.location.href='?month='+this.value">
+            </div>
+        </div>
+
 
         <div id="public-summary-card" class="public-summary-card">
             <div class="public-stat-item">
